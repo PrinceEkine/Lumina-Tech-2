@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lumina Tech | Home</title>
+  <link rel="icon" type="image/png" href="/logo1.png">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/css/intlTelInput.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-slate-950 text-white overflow-x-hidden">
+  <!-- Navbar -->
+  <header class="navbar">
+    <div class="container">
+      <div class="logo">
+        <img src="logo2.png" alt="Lumina Tech Logo" class="h-12 w-auto">
+      </div>
+      <nav>
+        <div class="mobile-menu-toggle" id="mobile-toggle">
+          <i class="fas fa-bars"></i>
+        </div>
+        <ul class="nav-links" id="nav-links">
+          <li><a href="/" class="active">Home</a></li>
+          <li><a href="/booking.html">Booking</a></li>
+          <li><a href="/blog.html">Blogs</a></li>
+          <li><a href="/contact.html">Contact</a></li>
+          <li class="flex items-center">
+            <select class="currency-selector glass bg-transparent border-none text-xs font-bold text-cyan-400 mr-2 focus:outline-none cursor-pointer">
+              <option value="USD">USD ($)</option>
+              <option value="EUR">EUR (€)</option>
+              <option value="GBP">GBP (£)</option>
+              <option value="NGN">NGN (₦)</option>
+            </select>
+            <button id="theme-toggle" class="theme-toggle-btn mr-4" aria-label="Toggle dark mode">
+              <i class="fas fa-moon"></i>
+            </button>
+          </li>
+          <li>
+            <button id="staff-login-btn" class="staff-btn">Staff Login</button>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Login Modal -->
+  <div id="login-modal" class="modal-overlay">
+    <div class="modal-content glass">
+      <span id="modal-close" class="modal-close"><i class="fas fa-times"></i></span>
+      <h2 class="text-2xl font-bold mb-6 text-center">Staff <span class="text-cyan-400">Login</span></h2>
+      <form class="login-form">
+        <div class="form-group">
+          <label for="username">Username or Email</label>
+          <input type="text" id="username" placeholder="admin or your email" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="Enter password" required>
+        </div>
+        <div class="form-group">
+          <label for="phone">Phone Number</label>
+          <input id="phone" type="tel" placeholder="e.g. 07012345678" required>
+        </div>
+        <button type="submit" class="btn-primary w-full mt-4">Login</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Hero -->
+  <section class="hero relative overflow-hidden">
+    <div class="atmosphere"></div>
+    <div class="container relative z-10">
+      <div class="hero-grid">
+        <div class="hero-content reveal">
+          <div class="badge glass mb-6">Next-Gen Digital Agency</div>
+          <h1 class="title-text">Driving <span class="text-gradient">Innovation</span> Through Smart Design</h1>
+          <p class="hero-sub">We craft high-impact websites, videos, and visuals that scale with your ambition. Next-level technology for the modern era.</p>
+          <div class="hero-buttons">
+            <a href="/booking.html" class="btn-primary">Get Started</a>
+            <a href="#services" class="btn-secondary">Explore Services</a>
+          </div>
+          <div class="hero-stats mt-12 flex gap-8">
+            <div>
+              <div class="text-2xl font-bold">120+</div>
+              <div class="text-xs text-slate-400 uppercase tracking-widest">Projects</div>
+            </div>
+            <div>
+              <div class="text-2xl font-bold">45+</div>
+              <div class="text-xs text-slate-400 uppercase tracking-widest">Clients</div>
+            </div>
+            <div>
+              <div class="text-2xl font-bold">99%</div>
+              <div class="text-xs text-slate-400 uppercase tracking-widest">Success</div>
+            </div>
+          </div>
+        </div>
+        <div class="hero-visual reveal delay-200">
+            <div class="floating-orb"></div>
+            <div class="floating-card glass p-4 top-0 right-0">
+              <i class="fas fa-bolt text-cyan-400 mb-2"></i>
+              <div class="text-xs font-bold">Fast Delivery</div>
+            </div>
+            <div class="floating-card glass p-4 bottom-10 left-0">
+              <i class="fas fa-shield-alt text-blue-400 mb-2"></i>
+              <div class="text-xs font-bold">Secure Code</div>
+            </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Services -->
+  <section id="services" class="services py-24">
+    <div class="container">
+      <div class="section-header reveal">
+        <h2 class="section-title">Our Expertise</h2>
+        <p class="section-subtitle">Comprehensive solutions for your digital presence.</p>
+      </div>
+      <div class="grid-layout">
+        <div class="card glass reveal delay-100">
+          <div class="card-icon"><i class="fas fa-code"></i></div>
+          <h3>Web Development</h3>
+          <p>Responsive, high-performance websites built with the latest technologies.</p>
+        </div>
+        <div class="card glass reveal delay-200">
+          <div class="card-icon"><i class="fas fa-paint-brush"></i></div>
+          <h3>Graphic Design</h3>
+          <p>Visual identities and marketing assets that capture attention and drive results.</p>
+        </div>
+        <div class="card glass reveal delay-300">
+          <div class="card-icon"><i class="fas fa-video"></i></div>
+          <h3>Video Production</h3>
+          <p>Cinematic editing and motion graphics for social media and advertising.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Portfolio -->
+  <section class="portfolio py-24 bg-slate-900/50">
+    <div class="container">
+      <div class="section-header reveal">
+        <h2 class="section-title">Selected Works</h2>
+        <p class="section-subtitle">A glimpse into our creative laboratory.</p>
+      </div>
+      <div class="portfolio-grid">
+        <div class="portfolio-item glass reveal delay-100">
+          <div class="portfolio-bg" style="--bg-img: url('https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=800')"></div>
+          <div class="portfolio-overlay">
+            <h4>Cyber Stream</h4>
+            <span>Web App</span>
+          </div>
+        </div>
+        <div class="portfolio-item glass reveal delay-200">
+          <div class="portfolio-bg" style="--bg-img: url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800')"></div>
+          <div class="portfolio-overlay">
+            <h4>Neon Brand</h4>
+            <span>Identity</span>
+          </div>
+        </div>
+        <div class="portfolio-item glass reveal delay-300">
+          <div class="portfolio-bg" style="--bg-img: url('https://images.unsplash.com/photo-1558655146-d09347e92766?auto=format&fit=crop&q=80&w=800')"></div>
+          <div class="portfolio-overlay">
+            <h4>Motion Flow</h4>
+            <span>Video</span>
+          </div>
+        </div>
+        <div class="portfolio-item glass reveal delay-400">
+          <div class="portfolio-bg" style="--bg-img: url('https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&q=80&w=800')"></div>
+          <div class="portfolio-overlay">
+            <h4>Data Core</h4>
+            <span>UI/UX</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <img src="logo2.png" alt="Lumina Tech Logo" class="h-10 w-auto mb-4">
+          <p>Elevating digital standards since 2026.</p>
+        </div>
+        <div class="footer-links">
+          <a href="/">Home</a>
+          <a href="/booking.html">Booking</a>
+          <a href="/blog.html">Blog</a>
+          <a href="/contact.html">Contact</a>
+        </div>
+        <div class="footer-social">
+          <a href="#"><i class="fab fa-twitter"></i></a>
+          <a href="#"><i class="fab fa-linkedin"></i></a>
+          <a href="#"><i class="fab fa-instagram"></i></a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 Lumina Tech. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Floating Chat Widget -->
+  <div class="chat-widget glass" id="chat-widget">
+    <div class="chat-header" id="chat-close">
+      <span>Message Us</span>
+      <i class="fas fa-times"></i>
+    </div>
+    <form class="chat-form">
+      <input type="text" placeholder="Your Name" required>
+      <input type="email" placeholder="Your Email" required>
+      <textarea placeholder="Your Message" rows="3" required></textarea>
+      <button type="submit" class="btn-primary">Send Message</button>
+    </form>
+  </div>
+  <button class="chat-btn" id="chat-btn">
+    <i class="fas fa-comment-alt"></i>
+  </button>
+
+  <!-- Scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/intlTelInput.min.js" defer></script>
+  <script type="module" src="/script.js"></script>
+</body>
+</html>
+

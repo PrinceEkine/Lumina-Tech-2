@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lumina Tech | Blog Story</title>
+  <link rel="icon" type="image/png" href="/logo1.png">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet">
+  <style>
+    .story-content {
+      max-width: 800px;
+      margin: 0 auto;
+      line-height: 1.8;
+      font-size: 1.125rem;
+      color: #cbd5e1;
+    }
+    .story-content h2 {
+      color: white;
+      margin-top: 40px;
+      margin-bottom: 20px;
+      font-size: 2rem;
+    }
+    .story-content p {
+      margin-bottom: 24px;
+    }
+    .story-content blockquote {
+      border-left: 4px solid var(--cyan);
+      padding-left: 24px;
+      font-style: italic;
+      margin: 40px 0;
+      color: white;
+      font-size: 1.5rem;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-white overflow-x-hidden">
+  <!-- Navbar -->
+  <header class="navbar">
+    <div class="container">
+      <div class="logo">
+        <img src="logo2.png" alt="Lumina Tech Logo" class="h-12 w-auto">
+      </div>
+      <nav>
+        <div class="mobile-menu-toggle" id="mobile-toggle">
+          <i class="fas fa-bars"></i>
+        </div>
+        <ul class="nav-links" id="nav-links">
+          <li><a href="/">Home</a></li>
+          <li><a href="/booking.html">Booking</a></li>
+          <li><a href="/blog.html" class="active">Blogs</a></li>
+          <li><a href="/contact.html">Contact</a></li>
+          <li class="flex items-center">
+            <select class="currency-selector glass bg-transparent border-none text-xs font-bold text-cyan-400 mr-2 focus:outline-none cursor-pointer">
+              <option value="USD">USD ($)</option>
+              <option value="EUR">EUR (€)</option>
+              <option value="GBP">GBP (£)</option>
+              <option value="NGN">NGN (₦)</option>
+            </select>
+            <button id="theme-toggle" class="theme-toggle-btn mr-4" aria-label="Toggle dark mode">
+              <i class="fas fa-moon"></i>
+            </button>
+          </li>
+          <li>
+            <button id="staff-login-btn" class="staff-btn">Staff Login</button>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Login Modal -->
+  <div id="login-modal" class="modal-overlay">
+    <div class="modal-content glass">
+      <span id="modal-close" class="modal-close"><i class="fas fa-times"></i></span>
+      <h2 class="text-2xl font-bold mb-6 text-center">Staff <span class="text-cyan-400">Login</span></h2>
+      <form class="login-form">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" placeholder="Enter username" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="Enter password" required>
+        </div>
+        <div class="form-group">
+          <label for="phone">Phone Number</label>
+          <input id="phone" type="tel" placeholder="e.g. 07012345678" required>
+        </div>
+        <button type="submit" class="btn-primary w-full mt-4">Login</button>
+      </form>
+    </div>
+  </div>
+
+  <article class="py-24">
+    <div class="container">
+      <div id="story-header" class="mb-12 text-center reveal">
+        <div id="story-meta" class="flex items-center justify-center gap-4 text-xs text-cyan-400 mb-4 uppercase tracking-widest font-bold">
+          <span id="story-category">Category</span>
+          <span>•</span>
+          <span id="story-date">Date</span>
+        </div>
+        <h1 id="story-title" class="text-5xl md:text-6xl font-bold mb-8">Story Title</h1>
+        <div class="w-full h-[500px] rounded-3xl overflow-hidden glass mb-12">
+          <img id="story-image" src="" alt="Story Image" class="w-full h-full object-cover">
+        </div>
+      </div>
+
+      <div id="story-body" class="story-content reveal delay-200">
+        <!-- Content injected via JS -->
+      </div>
+
+      <div class="mt-24 text-center reveal">
+        <hr class="border-slate-800 mb-12">
+        <h3 class="text-2xl font-bold mb-6">Share this story</h3>
+        <div class="flex justify-center gap-6 text-2xl">
+          <a href="#" class="text-slate-400 hover:text-cyan-400 transition-colors"><i class="fab fa-twitter"></i></a>
+          <a href="#" class="text-slate-400 hover:text-cyan-400 transition-colors"><i class="fab fa-facebook"></i></a>
+          <a href="#" class="text-slate-400 hover:text-cyan-400 transition-colors"><i class="fab fa-linkedin"></i></a>
+        </div>
+        <div class="mt-12">
+          <a href="/blog.html" class="btn-secondary">Back to Blog</a>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <img src="logo2.png" alt="Lumina Tech Logo" class="h-10 w-auto mb-4">
+          <p>Elevating digital standards since 2026.</p>
+        </div>
+        <div class="footer-links">
+          <a href="/">Home</a>
+          <a href="/booking.html">Booking</a>
+          <a href="/blog.html">Blog</a>
+          <a href="/contact.html">Contact</a>
+        </div>
+        <div class="footer-social">
+          <a href="#"><i class="fab fa-twitter"></i></a>
+          <a href="#"><i class="fab fa-linkedin"></i></a>
+          <a href="#"><i class="fab fa-instagram"></i></a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 Lumina Tech. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script type="module" src="/script.js"></script>
+  <script type="module">
+    import { supabase } from './supabase';
+    
+    window.addEventListener('DOMContentLoaded', async () => {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+      
+      if (!id) {
+        window.location.href = '/blog.html';
+        return;
+      }
+
+      try {
+        const { data: story, error } = await supabase
+          .from('blogs')
+          .select('*')
+          .eq('id', id)
+          .single();
+
+        if (error || !story) {
+          console.error("Story not found:", error);
+          // Fallback to static if needed or redirect
+          window.location.href = '/blog.html';
+          return;
+        }
+
+        document.getElementById('story-title').innerText = story.title;
+        document.getElementById('story-category').innerText = story.category;
+        document.getElementById('story-date').innerText = new Date(story.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        document.getElementById('story-image').src = story.image_url;
+        document.getElementById('story-body').innerHTML = story.content;
+        
+        document.title = `Lumina Tech | ${story.title}`;
+        
+        // Trigger reveal manually for injected content
+        const revealElements = document.querySelectorAll('.reveal');
+        revealElements.forEach(el => el.classList.add('active'));
+      } catch (err) {
+        console.error("Failed to fetch story:", err);
+        window.location.href = '/blog.html';
+      }
+    });
+  </script>
+</body>
+</html>

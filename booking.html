@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lumina Tech | Booking</title>
+  <link rel="icon" type="image/png" href="/logo1.png">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/css/intlTelInput.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-slate-950 text-white overflow-x-hidden">
+  <!-- Navbar -->
+  <header class="navbar">
+    <div class="container">
+      <div class="logo">
+        <img src="logo2.png" alt="Lumina Tech Logo" class="h-12 w-auto">
+      </div>
+      <nav>
+        <div class="mobile-menu-toggle" id="mobile-toggle">
+          <i class="fas fa-bars"></i>
+        </div>
+        <ul class="nav-links" id="nav-links">
+          <li><a href="/">Home</a></li>
+          <li><a href="/booking.html" class="active">Booking</a></li>
+          <li><a href="/blog.html">Blogs</a></li>
+          <li><a href="/contact.html">Contact</a></li>
+          <li class="flex items-center">
+            <select class="currency-selector glass bg-transparent border-none text-xs font-bold text-cyan-400 mr-2 focus:outline-none cursor-pointer">
+              <option value="USD">USD ($)</option>
+              <option value="EUR">EUR (€)</option>
+              <option value="GBP">GBP (£)</option>
+              <option value="NGN">NGN (₦)</option>
+            </select>
+            <button id="theme-toggle" class="theme-toggle-btn mr-4" aria-label="Toggle dark mode">
+              <i class="fas fa-moon"></i>
+            </button>
+          </li>
+          <li>
+            <button id="staff-login-btn" class="staff-btn">Staff Login</button>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Login Modal -->
+  <div id="login-modal" class="modal-overlay">
+    <div class="modal-content glass">
+      <span id="modal-close" class="modal-close"><i class="fas fa-times"></i></span>
+      <h2 class="text-2xl font-bold mb-6 text-center">Staff <span class="text-cyan-400">Login</span></h2>
+      <form class="login-form">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" placeholder="Enter username" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="Enter password" required>
+        </div>
+        <div class="form-group">
+          <label for="phone">Phone Number</label>
+          <input id="phone" type="tel" placeholder="e.g. 07012345678" required>
+        </div>
+        <button type="submit" class="btn-primary w-full mt-4">Login</button>
+      </form>
+    </div>
+  </div>
+
+  <section class="page-header relative overflow-hidden">
+    <div class="atmosphere"></div>
+    <div class="container relative z-10">
+      <div class="reveal">
+        <h1 class="page-title">Book a <span class="text-gradient">Service</span></h1>
+        <p class="page-subtitle">Ready to scale your digital presence? Choose a service and find a time that works for you.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="booking py-24">
+    <div class="container">
+      <div class="glass p-12 max-w-2xl mx-auto reveal">
+        <form class="booking-form space-y-8">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="form-group">
+              <label for="name">Full Name</label>
+              <input type="text" id="name" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-lg" placeholder="John Doe" required>
+            </div>
+            <div class="form-group">
+              <label for="email">Email Address</label>
+              <input type="email" id="email" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-lg" placeholder="john@example.com" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="service">Select Service</label>
+            <select id="service" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-lg" required>
+              <option value="">-- Choose a Service --</option>
+              <option value="web">Web Design & Development</option>
+              <option value="graphic">Graphic Design & Branding</option>
+              <option value="video">Video Production & Editing</option>
+              <option value="consult">Tech Consultation</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="form-group">
+              <label for="date">Select Date</label>
+              <input type="date" id="date" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-lg" required>
+            </div>
+            <div class="form-group">
+              <label for="time">Select Time</label>
+              <input type="time" id="time" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-lg" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="details">Project Details (Optional)</label>
+            <textarea id="details" rows="4" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-lg" placeholder="Tell us a bit about your project..."></textarea>
+          </div>
+          <button type="submit" class="btn-primary w-full text-lg py-4">Confirm Booking</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <img src="logo2.png" alt="Lumina Tech Logo" class="h-10 w-auto mb-4">
+          <p>Elevating digital standards since 2026.</p>
+        </div>
+        <div class="footer-links">
+          <a href="/">Home</a>
+          <a href="/booking.html">Booking</a>
+          <a href="/blog.html">Blog</a>
+          <a href="/contact.html">Contact</a>
+        </div>
+        <div class="footer-social">
+          <a href="#"><i class="fab fa-twitter"></i></a>
+          <a href="#"><i class="fab fa-linkedin"></i></a>
+          <a href="#"><i class="fab fa-instagram"></i></a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 Lumina Tech. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Floating Chat Widget -->
+  <div class="chat-widget glass" id="chat-widget">
+    <div class="chat-header" id="chat-close">
+      <span>Message Us</span>
+      <i class="fas fa-times"></i>
+    </div>
+    <form class="chat-form">
+      <input type="text" placeholder="Your Name" required>
+      <input type="email" placeholder="Your Email" required>
+      <textarea placeholder="Your Message" rows="3" required></textarea>
+      <button type="submit" class="btn-primary">Send Message</button>
+    </form>
+  </div>
+  <button class="chat-btn" id="chat-btn">
+    <i class="fas fa-comment-alt"></i>
+  </button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/intlTelInput.min.js"></script>
+  <script type="module" src="/script.js"></script>
+</body>
+</html>

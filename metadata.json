@@ -1,0 +1,7 @@
+{
+  "name": "Lumina Tech Admin Portal",
+  "description": "A comprehensive admin and staff management portal for Lumina Tech, featuring attendance tracking, task management, leave requests, and real-time communication.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

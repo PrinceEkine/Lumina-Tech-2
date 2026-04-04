@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lumina Tech | Contact</title>
+  <link rel="icon" type="image/png" href="/logo1.png">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/css/intlTelInput.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-slate-950 text-white overflow-x-hidden">
+  <!-- Navbar -->
+  <header class="navbar">
+    <div class="container">
+      <div class="logo">
+        <img src="logo2.png" alt="Lumina Tech Logo" class="h-12 w-auto">
+      </div>
+      <nav>
+        <div class="mobile-menu-toggle" id="mobile-toggle">
+          <i class="fas fa-bars"></i>
+        </div>
+        <ul class="nav-links" id="nav-links">
+          <li><a href="/">Home</a></li>
+          <li><a href="/booking.html">Booking</a></li>
+          <li><a href="/blog.html">Blogs</a></li>
+          <li><a href="/contact.html" class="active">Contact</a></li>
+          <li class="flex items-center">
+            <select class="currency-selector glass bg-transparent border-none text-xs font-bold text-cyan-400 mr-2 focus:outline-none cursor-pointer">
+              <option value="USD">USD ($)</option>
+              <option value="EUR">EUR (€)</option>
+              <option value="GBP">GBP (£)</option>
+              <option value="NGN">NGN (₦)</option>
+            </select>
+            <button id="theme-toggle" class="theme-toggle-btn mr-4" aria-label="Toggle dark mode">
+              <i class="fas fa-moon"></i>
+            </button>
+          </li>
+          <li>
+            <button id="staff-login-btn" class="staff-btn">Staff Login</button>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Login Modal -->
+  <div id="login-modal" class="modal-overlay">
+    <div class="modal-content glass">
+      <span id="modal-close" class="modal-close"><i class="fas fa-times"></i></span>
+      <h2 class="text-2xl font-bold mb-6 text-center">Staff <span class="text-cyan-400">Login</span></h2>
+      <form class="login-form">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" placeholder="Enter username" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="Enter password" required>
+        </div>
+        <div class="form-group">
+          <label for="phone">Phone Number</label>
+          <input id="phone" type="tel" placeholder="e.g. 07012345678" required>
+        </div>
+        <button type="submit" class="btn-primary w-full mt-4">Login</button>
+      </form>
+    </div>
+  </div>
+
+  <section class="page-header relative overflow-hidden">
+    <div class="atmosphere"></div>
+    <div class="container relative z-10">
+      <div class="reveal">
+        <h1 class="page-title">Get in <span class="text-gradient">Touch</span></h1>
+        <p class="page-subtitle">Have a question or a project in mind? We're here to help you shine.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="contact py-24">
+    <div class="container">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start mb-24">
+        <div class="reveal delay-100">
+          <h2 class="text-3xl font-bold mb-8">Contact Information</h2>
+          <div class="space-y-8 mb-12">
+            <div class="flex items-start gap-6">
+              <div class="w-12 h-12 glass flex items-center justify-center text-cyan-400 flex-shrink-0">
+                <i class="fas fa-map-marker-alt"></i>
+              </div>
+              <div>
+                <h4 class="font-bold mb-1">Our Location</h4>
+                <p class="text-slate-400">123 Innovation Drive, Tech City, TC 2026</p>
+              </div>
+            </div>
+            <div class="flex items-start gap-6">
+              <div class="w-12 h-12 glass flex items-center justify-center text-cyan-400 flex-shrink-0">
+                <i class="fas fa-envelope"></i>
+              </div>
+              <div>
+                <h4 class="font-bold mb-1">Email Us</h4>
+                <p class="text-slate-400">hello@luminatech.com</p>
+              </div>
+            </div>
+            <div class="flex items-start gap-6">
+              <div class="w-12 h-12 glass flex items-center justify-center text-cyan-400 flex-shrink-0">
+                <i class="fas fa-phone-alt"></i>
+              </div>
+              <div>
+                <h4 class="font-bold mb-1">Call Us</h4>
+                <p class="text-slate-400">+1 (555) 123-4567</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Map Placeholder -->
+          <div class="glass overflow-hidden h-64 rounded-2xl relative reveal delay-150">
+            <div class="absolute inset-0 bg-slate-900 flex items-center justify-center">
+              <div class="text-center">
+                <i class="fas fa-map-marked-alt text-4xl text-cyan-400/20 mb-4"></i>
+                <p class="text-slate-500 text-sm">Interactive Map Loading...</p>
+              </div>
+            </div>
+            <img src="https://picsum.photos/seed/map/800/400?grayscale" alt="Map Placeholder" class="w-full h-full object-cover opacity-30">
+          </div>
+        </div>
+
+        <div class="glass p-12 reveal delay-200">
+          <h3 class="text-2xl font-bold mb-6">Send a <span class="text-gradient">Message</span></h3>
+          <form class="contact-form space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" placeholder="John Doe" required>
+              </div>
+              <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" placeholder="john@example.com" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="subject">Subject</label>
+              <input type="text" id="subject" placeholder="How can we help?" required>
+            </div>
+            <div class="form-group">
+              <label for="message">Your Message</label>
+              <textarea id="message" rows="6" placeholder="Tell us more about your inquiry..." required></textarea>
+            </div>
+            <button type="submit" class="btn-primary w-full py-4 text-lg">Send Message</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- FAQ Section -->
+      <div class="reveal delay-300">
+        <h2 class="text-3xl font-bold mb-12 text-center">Frequently Asked <span class="text-gradient">Questions</span></h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div class="glass p-8">
+            <h4 class="font-bold mb-3 text-cyan-400">What services do you offer?</h4>
+            <p class="text-slate-400 text-sm">We specialize in Web Design, Graphic Branding, Video Production, and Tech Consultation for modern businesses.</p>
+          </div>
+          <div class="glass p-8">
+            <h4 class="font-bold mb-3 text-cyan-400">How long does a project take?</h4>
+            <p class="text-slate-400 text-sm">Timelines vary by project scope, but most standard web or branding projects are completed within 4-6 weeks.</p>
+          </div>
+          <div class="glass p-8">
+            <h4 class="font-bold mb-3 text-cyan-400">Do you offer ongoing support?</h4>
+            <p class="text-slate-400 text-sm">Yes, we provide maintenance and support packages to ensure your digital assets remain secure and up-to-date.</p>
+          </div>
+          <div class="glass p-8">
+            <h4 class="font-bold mb-3 text-cyan-400">Can I book a consultation?</h4>
+            <p class="text-slate-400 text-sm">Absolutely! Use our <a href="/booking.html" class="text-white hover:text-cyan-400 underline">Booking Page</a> to schedule a time that works for you.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <img src="logo2.png" alt="Lumina Tech Logo" class="h-10 w-auto mb-4">
+          <p>Elevating digital standards since 2026.</p>
+        </div>
+        <div class="footer-links">
+          <a href="/">Home</a>
+          <a href="/booking.html">Booking</a>
+          <a href="/blog.html">Blog</a>
+          <a href="/contact.html">Contact</a>
+        </div>
+        <div class="footer-social">
+          <a href="#"><i class="fab fa-twitter"></i></a>
+          <a href="#"><i class="fab fa-linkedin"></i></a>
+          <a href="#"><i class="fab fa-instagram"></i></a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 Lumina Tech. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Floating Chat Widget -->
+  <div class="chat-widget glass" id="chat-widget">
+    <div class="chat-header" id="chat-close">
+      <span>Message Us</span>
+      <i class="fas fa-times"></i>
+    </div>
+    <form class="chat-form">
+      <input type="text" placeholder="Your Name" required>
+      <input type="email" placeholder="Your Email" required>
+      <textarea placeholder="Your Message" rows="3" required></textarea>
+      <button type="submit" class="btn-primary">Send Message</button>
+    </form>
+  </div>
+  <button class="chat-btn" id="chat-btn">
+    <i class="fas fa-comment-alt"></i>
+  </button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/intlTelInput.min.js"></script>
+  <script type="module" src="/script.js"></script>
+</body>
+</html>
