@@ -1506,6 +1506,8 @@ function setupRealtimeSubscriptions() {
 // Initialize real-time
 setupRealtimeSubscriptions();
 
+const staffTableBody = document.getElementById('staff-table-body');
+
 async function fetchStaff() {
   if (!staffTableBody) return;
   
