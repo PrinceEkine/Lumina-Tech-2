@@ -182,6 +182,7 @@
             <li><a href="#" id="nav-send-email"><i class="far fa-envelope"></i> Send Email</a></li>
             <li><a href="#" id="nav-media"><i class="far fa-folder-open"></i> Media Storage</a></li>
             <li class="staff-only"><a href="#" id="nav-leave"><i class="fas fa-walking"></i> Seek Work Leave</a></li>
+            <li><a href="#" id="nav-settings"><i class="fas fa-cog"></i> Settings</a></li>
             
             <!-- Admin Only Links -->
             <li class="admin-only border-t border-white/10 pt-4 mt-4">
@@ -192,7 +193,6 @@
             <li class="admin-only"><a href="#" id="nav-staff"><i class="fas fa-users"></i> Staff Members</a></li>
             <li class="admin-only"><a href="#" id="nav-assign-task"><i class="fas fa-clipboard-list"></i> Assign Tasks</a></li>
             <li class="admin-only"><a href="#" id="nav-blogs"><i class="fas fa-newspaper"></i> Manage Blogs</a></li>
-            <li class="admin-only"><a href="#" id="nav-settings"><i class="fas fa-cog"></i> Settings</a></li>
           </ul>
         </nav>
       </div>
@@ -272,6 +272,10 @@
 
       <!-- Dashboard Section -->
       <div id="dashboard-view">
+        <div class="mb-8">
+          <h2 class="text-2xl font-bold">Welcome back, <span class="text-cyan-400" id="welcome-name">User</span>!</h2>
+          <p class="text-slate-400 text-sm">Here's what's happening today.</p>
+        </div>
         <!-- Stats -->
         <div class="stats-grid">
           <!-- Admin Stats -->
@@ -1038,14 +1042,14 @@
             <h3 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fas fa-user-cog text-cyan-400"></i> Profile Settings</h3>
             <form class="flex flex-col gap-4">
               <div class="form-group">
-                <label>Admin Name</label>
-                <input type="text" value="Admin User" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2">
+                <label>Full Name</label>
+                <input type="text" id="settings-name" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2">
               </div>
               <div class="form-group">
                 <label>Email Address</label>
-                <input type="email" value="admin@lumina-tech.com" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2">
+                <input type="email" id="settings-email" readonly class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 opacity-60">
               </div>
-              <button type="button" class="btn-primary mt-2">Update Profile</button>
+              <button type="button" class="btn-primary mt-2" onclick="showToast('Profile update feature coming soon!', 'info')">Update Profile</button>
             </form>
           </div>
           <div class="glass p-8">
@@ -1143,6 +1147,10 @@
             <div class="form-group mb-4">
               <label for="staff-email">Email Address</label>
               <input type="email" id="staff-email" placeholder="Enter email address" required class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 focus:outline-none focus:border-cyan-500">
+            </div>
+            <div class="form-group mb-4">
+              <label for="staff-phone">Phone Number</label>
+              <input type="tel" id="staff-phone" placeholder="Enter phone number" required class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 focus:outline-none focus:border-cyan-500">
             </div>
             <div class="form-group mb-4">
               <label for="staff-password">Assign Password</label>

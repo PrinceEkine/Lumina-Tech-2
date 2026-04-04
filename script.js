@@ -193,6 +193,14 @@ try {
         if (headerName) headerName.innerText = userName;
         if (headerAvatar) headerAvatar.innerText = userName.charAt(0).toUpperCase();
 
+        const welcomeName = document.getElementById('welcome-name');
+        if (welcomeName) welcomeName.innerText = userName;
+
+        const settingsName = document.getElementById('settings-name');
+        const settingsEmail = document.getElementById('settings-email');
+        if (settingsName) settingsName.value = userName;
+        if (settingsEmail) settingsEmail.value = user.email;
+
         // Initial Data Fetch
         if (userRole === 'Admin') {
           fetchDashboardStats();
@@ -320,7 +328,7 @@ forms.forEach(form => {
         showToast('Login successful!', 'success');
         
         setTimeout(() => {
-          window.location.href = isUserAdmin ? '/admin.html' : '/staff.html';
+          window.location.href = '/admin.html';
         }, 1000);
 
       } catch (error) {
@@ -413,6 +421,7 @@ forms.forEach(form => {
  else if (form.id === 'add-staff-form') {
       try {
         const email = document.getElementById('staff-email').value;
+        const phone = document.getElementById('staff-phone').value;
         const password = document.getElementById('staff-password').value;
         const name = document.getElementById('staff-name').value;
         const role = document.getElementById('staff-role').value;
@@ -424,7 +433,8 @@ forms.forEach(form => {
           options: {
             data: {
               full_name: name,
-              role: role
+              role: role,
+              phone: phone
             }
           }
         });
@@ -436,6 +446,7 @@ forms.forEach(form => {
           id: authData.user?.id, // Link to auth user
           name: name,
           email: email,
+          phone_number: phone,
           role: role,
           status: 'Active',
           created_at: new Date().toISOString()
@@ -1714,13 +1725,15 @@ async function fetchStaffDashboardStats() {
   const streakEl = document.getElementById('staff-streak-stat');
   const attendanceRateEl = document.getElementById('staff-attendance-rate-stat');
   const attendanceDetailEl = document.getElementById('staff-attendance-detail');
+  const staffDashboardTasksBody = document.getElementById('staff-dashboard-tasks-body');
   
   try {
     // Fetch user's tasks
     const { data: tasks, error: tasksError } = await supabase
       .from('tasks')
       .select('*')
-      .eq('assignee_id', user.id);
+      .eq('assignee_id', user.id)
+      .order('due_date', { ascending: true });
     
     if (tasksError) throw tasksError;
 
@@ -1733,6 +1746,34 @@ async function fetchStaffDashboardStats() {
     if (attendanceError) throw attendanceError;
 
     const completedTasks = tasks ? tasks.filter(t => t.status === 'completed').length : 0;
+    const upcomingTasks = tasks ? tasks.filter(t => t.status !== 'completed').slice(0, 5) : [];
+    
+    // Populate upcoming tasks table
+    if (staffDashboardTasksBody) {
+      staffDashboardTasksBody.innerHTML = '';
+      if (upcomingTasks.length === 0) {
+        staffDashboardTasksBody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-slate-500">No upcoming tasks</td></tr>';
+      } else {
+        upcomingTasks.forEach(task => {
+          const tr = document.createElement('tr');
+          const priorityClass = `priority-${task.priority.toLowerCase()}`;
+          const statusClass = task.status === 'completed' ? 'status-completed' : 'status-pending';
+
+          tr.innerHTML = `
+            <td><div class="font-bold">${task.title}</div></td>
+            <td><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
+            <td>${task.due_date}</td>
+            <td><span class="status-badge ${statusClass}">${task.status}</span></td>
+            <td>
+              <button onclick="document.getElementById('nav-my-tasks').click()" class="text-cyan-400 hover:text-cyan-300 text-xs font-bold">
+                View
+              </button>
+            </td>
+          `;
+          staffDashboardTasksBody.appendChild(tr);
+        });
+      }
+    }
     
     // Calculate attendance rate
     let attendanceRate = '0%';
