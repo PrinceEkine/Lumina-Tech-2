@@ -302,6 +302,14 @@ forms.forEach(form => {
       
       const email = username.includes('@') ? username : `${username}@lumina.tech`;
 
+      // Configuration Check
+      const isSupabaseConfigured = import.meta.env.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder');
+      if (!isSupabaseConfigured) {
+        showToast('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your deployment settings and redeploy.', 'error');
+        setLoading(submitBtn, false, originalText);
+        return;
+      }
+
       try {
         // Attempt Email/Password Login for everyone
         const { data, error } = await supabase.auth.signInWithPassword({
