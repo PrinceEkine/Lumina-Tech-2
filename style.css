@@ -1352,7 +1352,13 @@ body.js-enabled .reveal.active {
 
 .footer-links {
   display: flex;
-  gap: 30px;
+  gap: 60px;
+}
+
+.footer-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .footer-links a {

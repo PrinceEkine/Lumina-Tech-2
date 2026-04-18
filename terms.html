@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lumina Tech | Booking Confirmation</title>
+  <title>Lumina Tech | Terms of Service</title>
   <link rel="icon" type="image/png" href="/logo1.png">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -49,68 +49,37 @@
     </div>
   </header>
 
-  <!-- Login Modal -->
-  <div id="login-modal" class="modal-overlay">
-    <div class="modal-content glass">
-      <span id="modal-close" class="modal-close"><i class="fas fa-times"></i></span>
-      <h2 class="text-2xl font-bold mb-6 text-center">Staff <span class="text-cyan-400">Login</span></h2>
-      <form class="login-form">
-        <div class="form-group">
-          <label for="username">Username</label>
-          <input type="text" id="username" placeholder="Enter username" required>
-        </div>
-        <div class="form-group">
-          <label for="password">Password</label>
-          <input type="password" id="password" placeholder="Enter password" required>
-        </div>
-        <div class="form-group">
-          <label for="phone">Country</label>
-          <input id="phone" type="tel">
-        </div>
-        <button type="submit" class="btn-primary w-full mt-4">Login</button>
-      </form>
-    </div>
-  </div>
-
   <section class="page-header relative overflow-hidden">
     <div class="atmosphere"></div>
     <div class="container relative z-10">
       <div class="reveal">
-        <h1 class="page-title">Booking <span class="text-gradient">Confirmed</span></h1>
-        <p class="page-subtitle">Thank you for choosing Lumina Tech. Your booking has been successfully received.</p>
+        <h1 class="page-title">Terms of <span class="text-gradient">Service</span></h1>
+        <p class="page-subtitle">Last updated: April 18, 2026. Understanding our mutual agreement.</p>
       </div>
     </div>
   </section>
 
-  <section class="confirmation py-24">
+  <section class="py-24">
     <div class="container">
-      <div class="glass p-12 max-w-2xl mx-auto reveal text-center">
-        <div class="mb-8">
-          <div class="w-20 h-20 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-6">
-            <i class="fas fa-check text-4xl"></i>
-          </div>
-          <h2 class="text-3xl font-bold mb-2">Success!</h2>
-          <p class="text-slate-400">We've scheduled your appointment. Here are the details:</p>
-        </div>
+      <div class="glass p-12 rounded-[2.5rem] max-w-4xl mx-auto reveal">
+        <div class="prose prose-invert prose-cyan">
+          <h2 class="text-3xl font-bold mb-6">1. Acceptance of Terms</h2>
+          <p class="text-slate-400 mb-8 leading-relaxed">By accessing or using the Lumina Tech platform, you agree to be bound by these Terms of Service. If you do not agree with any part of these terms, you must not use our services.</p>
 
-        <div class="space-y-6 text-left bg-slate-900/50 p-8 rounded-2xl border border-slate-800 mb-10">
-          <div class="flex justify-between border-bottom border-slate-800 pb-4">
-            <span class="text-slate-400">Service</span>
-            <span id="conf-service" class="font-bold text-cyan-400">--</span>
-          </div>
-          <div class="flex justify-between border-bottom border-slate-800 pb-4">
-            <span class="text-slate-400">Date</span>
-            <span id="conf-date" class="font-bold text-white">--</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-slate-400">Time</span>
-            <span id="conf-time" class="font-bold text-white">--</span>
-          </div>
-        </div>
+          <h2 class="text-3xl font-bold mb-6">2. Service Definitions</h2>
+          <p class="text-slate-400 mb-8 leading-relaxed">Lumina Tech provides digital branding, web engineering, video production, and tech consultation services as defined in specifically agreed-upon project proposals (SOWs).</p>
 
-        <div class="flex flex-col sm:flex-row gap-4 justify-center">
-          <a href="/" class="btn-secondary">Back to Home</a>
-          <a href="/booking.html" class="btn-primary">Book Another</a>
+          <h2 class="text-3xl font-bold mb-6">3. Professional Conduct</h2>
+          <p class="text-slate-400 mb-8 leading-relaxed">We expect all collaborators to provide accurate information and maintain professional communication during our engagement. Any misuse of our staff portal or client interfaces may reflect in service termination.</p>
+
+          <h2 class="text-3xl font-bold mb-6">4. Intellectual Property</h2>
+          <p class="text-slate-400 mb-8 leading-relaxed">Unless otherwise specified in a signed agreement, all creative work produced by Lumina Tech remains the intellectual property of Lumina Tech until full payment for the respective milestone has been received.</p>
+
+          <h2 class="text-3xl font-bold mb-6">5. Limitations of Liability</h2>
+          <p class="text-slate-400 mb-8 leading-relaxed">Lumina Tech shall not be liable for any indirect, incidental, or consequential damages resulting from the use or inability to use our digital assets beyond the total value of the fees paid for the specific project.</p>
+
+          <h2 class="text-3xl font-bold mb-6">6. Governing Law</h2>
+          <p class="text-slate-400 mb-8 leading-relaxed">These terms are governed by the laws of our primary operating jurisdiction, and any disputes will be resolved within its designated courts.</p>
         </div>
       </div>
     </div>
@@ -156,26 +125,6 @@
     </div>
   </footer>
 
-  <script src="/script.js"></script>
-  <script>
-    // Capture URL parameters and display them
-    window.addEventListener('DOMContentLoaded', () => {
-      const params = new URLSearchParams(window.location.search);
-      const serviceMap = {
-        'web': 'Web Design & Development',
-        'graphic': 'Graphic Design & Branding',
-        'video': 'Video Production & Editing',
-        'consult': 'Tech Consultation'
-      };
-      
-      const service = params.get('service');
-      const date = params.get('date');
-      const time = params.get('time');
-
-      if (service) document.getElementById('conf-service').innerText = serviceMap[service] || service;
-      if (date) document.getElementById('conf-date').innerText = date;
-      if (time) document.getElementById('conf-time').innerText = time;
-    });
-  </script>
+  <script type="module" src="/script.js"></script>
 </body>
 </html>

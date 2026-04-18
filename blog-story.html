@@ -41,9 +41,12 @@
   <!-- Navbar -->
   <header class="navbar">
     <div class="container">
-      <div class="logo">
-        <img src="logo2.png" alt="Lumina Tech Logo" class="h-12 w-auto">
-      </div>
+      <a href="/" class="logo flex items-center gap-2">
+        <div class="w-10 h-10 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <span class="text-white font-black text-xl">L</span>
+        </div>
+        <span class="text-xl font-bold tracking-tight">Lumina <span class="text-cyan-400">Tech</span></span>
+      </a>
       <nav>
         <div class="mobile-menu-toggle" id="mobile-toggle">
           <i class="fas fa-bars"></i>
@@ -133,14 +136,28 @@
     <div class="container">
       <div class="footer-content">
         <div class="footer-brand">
-          <img src="logo2.png" alt="Lumina Tech Logo" class="h-10 w-auto mb-4">
+          <a href="/" class="logo flex items-center gap-2 mb-4">
+            <div class="w-10 h-10 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-cyan-500/20">
+              <span class="text-white font-black text-xl">L</span>
+            </div>
+            <span class="text-xl font-bold tracking-tight text-white">Lumina <span class="text-cyan-400">Tech</span></span>
+          </a>
           <p>Elevating digital standards since 2026.</p>
         </div>
         <div class="footer-links">
-          <a href="/">Home</a>
-          <a href="/booking.html">Booking</a>
-          <a href="/blog.html">Blog</a>
-          <a href="/contact.html">Contact</a>
+          <div class="footer-group">
+            <h4 class="text-white font-bold mb-4 uppercase text-xs tracking-widest">Main</h4>
+            <a href="/">Home</a>
+            <a href="/booking.html">Booking</a>
+            <a href="/blog.html">Blog</a>
+            <a href="/contact.html">Contact</a>
+          </div>
+          <div class="footer-group">
+            <h4 class="text-white font-bold mb-4 uppercase text-xs tracking-widest">Company</h4>
+            <a href="/about.html">About Us</a>
+            <a href="/privacy.html">Privacy Policy</a>
+            <a href="/terms.html">Terms of Service</a>
+          </div>
         </div>
         <div class="footer-social">
           <a href="#"><i class="fab fa-twitter"></i></a>

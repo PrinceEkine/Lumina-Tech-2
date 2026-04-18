@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lumina Tech | Booking Confirmation</title>
+  <title>Lumina Tech | About Us</title>
   <link rel="icon" type="image/png" href="/logo1.png">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -49,68 +49,73 @@
     </div>
   </header>
 
-  <!-- Login Modal -->
-  <div id="login-modal" class="modal-overlay">
-    <div class="modal-content glass">
-      <span id="modal-close" class="modal-close"><i class="fas fa-times"></i></span>
-      <h2 class="text-2xl font-bold mb-6 text-center">Staff <span class="text-cyan-400">Login</span></h2>
-      <form class="login-form">
-        <div class="form-group">
-          <label for="username">Username</label>
-          <input type="text" id="username" placeholder="Enter username" required>
-        </div>
-        <div class="form-group">
-          <label for="password">Password</label>
-          <input type="password" id="password" placeholder="Enter password" required>
-        </div>
-        <div class="form-group">
-          <label for="phone">Country</label>
-          <input id="phone" type="tel">
-        </div>
-        <button type="submit" class="btn-primary w-full mt-4">Login</button>
-      </form>
-    </div>
-  </div>
-
   <section class="page-header relative overflow-hidden">
     <div class="atmosphere"></div>
     <div class="container relative z-10">
       <div class="reveal">
-        <h1 class="page-title">Booking <span class="text-gradient">Confirmed</span></h1>
-        <p class="page-subtitle">Thank you for choosing Lumina Tech. Your booking has been successfully received.</p>
+        <h1 class="page-title">About <span class="text-gradient">Lumina Tech</span></h1>
+        <p class="page-subtitle">Pioneering the next generation of digital excellence through innovation and smart design.</p>
       </div>
     </div>
   </section>
 
-  <section class="confirmation py-24">
+  <section class="py-24">
     <div class="container">
-      <div class="glass p-12 max-w-2xl mx-auto reveal text-center">
-        <div class="mb-8">
-          <div class="w-20 h-20 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-6">
-            <i class="fas fa-check text-4xl"></i>
-          </div>
-          <h2 class="text-3xl font-bold mb-2">Success!</h2>
-          <p class="text-slate-400">We've scheduled your appointment. Here are the details:</p>
-        </div>
-
-        <div class="space-y-6 text-left bg-slate-900/50 p-8 rounded-2xl border border-slate-800 mb-10">
-          <div class="flex justify-between border-bottom border-slate-800 pb-4">
-            <span class="text-slate-400">Service</span>
-            <span id="conf-service" class="font-bold text-cyan-400">--</span>
-          </div>
-          <div class="flex justify-between border-bottom border-slate-800 pb-4">
-            <span class="text-slate-400">Date</span>
-            <span id="conf-date" class="font-bold text-white">--</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-slate-400">Time</span>
-            <span id="conf-time" class="font-bold text-white">--</span>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center mb-24">
+        <div class="reveal">
+          <h2 class="text-4xl font-bold mb-6">Our <span class="text-cyan-400">Story</span></h2>
+          <p class="text-slate-400 text-lg mb-6 leading-relaxed">Founded in 2026, Lumina Tech was born from a simple yet powerful vision: to bridge the gap between complex technology and human-centric design. We believe that digital tools should not just function, but inspire.</p>
+          <p class="text-slate-400 text-lg mb-8 leading-relaxed">Our team of engineers, designers, and strategists work at the intersection of aesthetics and performance, delivering high-impact solutions that scale with global ambitions.</p>
+          <div class="flex gap-4">
+            <div class="glass p-6 rounded-2xl flex-1">
+              <div class="text-3xl font-bold text-cyan-400 mb-1">99%</div>
+              <div class="text-xs uppercase tracking-widest text-slate-500">Client Satisfaction</div>
+            </div>
+            <div class="glass p-6 rounded-2xl flex-1">
+              <div class="text-3xl font-bold text-blue-400 mb-1">500+</div>
+              <div class="text-xs uppercase tracking-widest text-slate-500">Global Projects</div>
+            </div>
           </div>
         </div>
+        <div class="relative reveal delay-200">
+          <div class="w-full h-[400px] rounded-3xl overflow-hidden glass shadow-2xl">
+            <img src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&q=80&w=800" alt="Team Collaboration" class="w-full h-full object-cover">
+          </div>
+          <div class="absolute -bottom-6 -left-6 glass p-6 rounded-2xl hidden md:block">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center text-cyan-400">
+                <i class="fas fa-microchip text-xl"></i>
+              </div>
+              <p class="font-bold text-sm">Technology-First<br><span class="text-[10px] text-slate-500 uppercase">Approach</span></p>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        <div class="flex flex-col sm:flex-row gap-4 justify-center">
-          <a href="/" class="btn-secondary">Back to Home</a>
-          <a href="/booking.html" class="btn-primary">Book Another</a>
+      <div class="reveal delay-300">
+        <h2 class="text-4xl font-bold mb-12 text-center">Our Core <span class="text-gradient">Values</span></h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div class="glass p-8 rounded-3xl group hover:bg-white/5 transition-all">
+            <div class="w-14 h-14 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 mb-6 group-hover:scale-110 transition-transform">
+              <i class="fas fa-lightbulb text-2xl"></i>
+            </div>
+            <h4 class="text-xl font-bold mb-4">Relentless Innovation</h4>
+            <p class="text-slate-500 text-sm leading-relaxed">We don't follow trends; we set them. Every project is an opportunity to push the boundaries of what's possible.</p>
+          </div>
+          <div class="glass p-8 rounded-3xl group hover:bg-white/5 transition-all">
+            <div class="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 mb-6 group-hover:scale-110 transition-transform">
+              <i class="fas fa-shield-halved text-2xl"></i>
+            </div>
+            <h4 class="text-xl font-bold mb-4">Architectural Integrity</h4>
+            <p class="text-slate-500 text-sm leading-relaxed">Security and stability are the foundations of our work. We build digital infrastructures that stand the test of time.</p>
+          </div>
+          <div class="glass p-8 rounded-3xl group hover:bg-white/5 transition-all">
+            <div class="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400 mb-6 group-hover:scale-110 transition-transform">
+              <i class="fas fa-heart text-2xl"></i>
+            </div>
+            <h4 class="text-xl font-bold mb-4">Human Connection</h4>
+            <p class="text-slate-500 text-sm leading-relaxed">Technology is a tool for people. We design interfaces that feel natural, intuitive, and engaging.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -156,26 +161,6 @@
     </div>
   </footer>
 
-  <script src="/script.js"></script>
-  <script>
-    // Capture URL parameters and display them
-    window.addEventListener('DOMContentLoaded', () => {
-      const params = new URLSearchParams(window.location.search);
-      const serviceMap = {
-        'web': 'Web Design & Development',
-        'graphic': 'Graphic Design & Branding',
-        'video': 'Video Production & Editing',
-        'consult': 'Tech Consultation'
-      };
-      
-      const service = params.get('service');
-      const date = params.get('date');
-      const time = params.get('time');
-
-      if (service) document.getElementById('conf-service').innerText = serviceMap[service] || service;
-      if (date) document.getElementById('conf-date').innerText = date;
-      if (time) document.getElementById('conf-time').innerText = time;
-    });
-  </script>
+  <script type="module" src="/script.js"></script>
 </body>
 </html>
