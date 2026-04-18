@@ -76,7 +76,7 @@
       <div class="hero-grid">
         <div class="hero-content reveal">
           <div class="badge glass mb-6">Next-Gen Digital Agency</div>
-          <h1 class="title-text">Driving <span class="text-gradient">Innovation</span> Through Smart Design</h1>
+          <h1 class="title-text">Driving <span class="text-gradient" id="typing-text">Innovation</span><span class="cursor-blink">|</span><br>Through Smart Design</h1>
           <p class="hero-sub">We craft high-impact websites, videos, and visuals that scale with your ambition. Next-level technology for the modern era.</p>
           <div class="hero-buttons">
             <a href="/booking.html" class="btn-primary">Get Started</a>
@@ -138,6 +138,37 @@
       </div>
     </div>
   </section>
+
+  <!-- Live Stats Ticker -->
+  <div class="live-ticker glass py-3 border-y border-white/5 overflow-hidden">
+    <div class="ticker-track flex items-center gap-12 whitespace-nowrap px-4">
+      <div class="ticker-item flex items-center gap-2">
+        <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+        <span class="text-xs font-bold uppercase tracking-widest text-white/70">Live Projects: 14 Alpha</span>
+      </div>
+      <div class="ticker-item flex items-center gap-2">
+        <span class="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></span>
+        <span class="text-xs font-bold uppercase tracking-widest text-white/70">Staff Online: 8 Experts</span>
+      </div>
+      <div class="ticker-item flex items-center gap-2">
+        <span class="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></span>
+        <span class="text-xs font-bold uppercase tracking-widest text-white/70">New Booking: 2m ago</span>
+      </div>
+      <div class="ticker-item flex items-center gap-2">
+        <span class="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
+        <span class="text-xs font-bold uppercase tracking-widest text-white/70">Recent Win: E-commerce V2</span>
+      </div>
+      <!-- Duplicate for seamless loop -->
+      <div class="ticker-item flex items-center gap-2">
+        <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+        <span class="text-xs font-bold uppercase tracking-widest text-white/70">Live Projects: 14 Alpha</span>
+      </div>
+      <div class="ticker-item flex items-center gap-2">
+        <span class="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></span>
+        <span class="text-xs font-bold uppercase tracking-widest text-white/70">Staff Online: 8 Experts</span>
+      </div>
+    </div>
+  </div>
 
   <!-- Portfolio -->
   <section class="portfolio py-24 bg-slate-900/50">
@@ -221,6 +252,9 @@
   <button class="chat-btn" id="chat-btn">
     <i class="fas fa-comment-alt"></i>
   </button>
+
+  <div id="custom-cursor" class="custom-cursor"></div>
+  <div id="cursor-follower" class="cursor-follower"></div>
 
   <!-- Scripts -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/intlTelInput.min.js" defer></script>

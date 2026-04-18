@@ -79,46 +79,142 @@
     </div>
   </section>
 
-  <section class="booking py-24">
-    <div class="container">
-      <div class="glass p-12 max-w-2xl mx-auto reveal">
-        <form class="booking-form space-y-8">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="form-group">
-              <label for="name">Full Name</label>
-              <input type="text" id="name" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-lg" placeholder="John Doe" required>
-            </div>
-            <div class="form-group">
-              <label for="email">Email Address</label>
-              <input type="email" id="email" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-lg" placeholder="john@example.com" required>
-            </div>
-          </div>
-          <div class="form-group">
-            <label for="service">Select Service</label>
-            <select id="service" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-lg" required>
-              <option value="">-- Choose a Service --</option>
-              <option value="web">Web Design & Development</option>
-              <option value="graphic">Graphic Design & Branding</option>
-              <option value="video">Video Production & Editing</option>
-              <option value="consult">Tech Consultation</option>
-            </select>
-          </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="form-group">
-              <label for="date">Select Date</label>
-              <input type="date" id="date" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-lg" required>
-            </div>
-            <div class="form-group">
-              <label for="time">Select Time</label>
-              <input type="time" id="time" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-lg" required>
+  <section class="booking py-24 relative">
+    <div class="container relative z-10">
+      <div class="booking-grid grid grid-cols-1 lg:grid-cols-5 gap-12">
+        <!-- Left Side: Info & Process -->
+        <div class="lg:col-span-2 space-y-12 reveal">
+          <div>
+            <div class="badge glass mb-4">Our Process</div>
+            <h2 class="text-4xl font-bold mb-6">How it <span class="text-cyan-400">Works</span></h2>
+            <div class="process-steps space-y-8">
+              <div class="step flex gap-6">
+                <div class="step-num w-10 h-10 rounded-full bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold shrink-0">1</div>
+                <div>
+                  <h4 class="font-bold text-lg">Select Your Service</h4>
+                  <p class="text-slate-400 text-sm">Pick the specialty that matches your project goals.</p>
+                </div>
+              </div>
+              <div class="step flex gap-6">
+                <div class="step-num w-10 h-10 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold shrink-0">2</div>
+                <div>
+                  <h4 class="font-bold text-lg">Choose a Slot</h4>
+                  <p class="text-slate-400 text-sm">Find a convenient date and time for our initial kickoff call.</p>
+                </div>
+              </div>
+              <div class="step flex gap-6">
+                <div class="step-num w-10 h-10 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 font-bold shrink-0">3</div>
+                <div>
+                  <h4 class="font-bold text-lg">Detailed Brief</h4>
+                  <p class="text-slate-400 text-sm">Tell us about your vision, goals, and any specific requirements.</p>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="form-group">
-            <label for="details">Project Details (Optional)</label>
-            <textarea id="details" rows="4" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-lg" placeholder="Tell us a bit about your project..."></textarea>
+
+          <div class="glass p-8 rounded-2xl relative overflow-hidden group">
+            <div class="absolute -right-4 -top-4 w-24 h-24 bg-cyan-500/10 rounded-full blur-2xl group-hover:bg-cyan-500/20 transition-colors"></div>
+            <i class="fas fa-quote-left text-3xl text-cyan-500/20 mb-4 block"></i>
+            <p class="text-slate-300 italic mb-6">"Lumina Tech transformed our vision into a digital reality in record time. Professional, proactive, and precise."</p>
+            <div class="flex items-center gap-4">
+              <div class="w-10 h-10 rounded-full bg-slate-800"></div>
+              <div>
+                <div class="font-bold text-sm">Sarah Jenkins</div>
+                <div class="text-[10px] text-slate-500 uppercase tracking-widest">CEO, Flux Digital</div>
+              </div>
+            </div>
           </div>
-          <button type="submit" class="btn-primary w-full text-lg py-4">Confirm Booking</button>
-        </form>
+        </div>
+
+        <!-- Right Side: Interactive Form -->
+        <div class="lg:col-span-3">
+          <div class="glass p-8 md:p-12 rounded-3xl reveal delay-200">
+            <form class="booking-form space-y-10">
+              <!-- Service Selection Cards -->
+              <div class="form-group">
+                <label class="block text-sm font-bold uppercase tracking-widest text-slate-400 mb-6">1. Which expertise do you need?</label>
+                <div class="service-cards grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <label class="service-card-item cursor-pointer">
+                    <input type="radio" name="service-radio" value="web" class="hidden" required>
+                    <div class="card-inner glass p-4 h-full flex flex-col items-center justify-center text-center gap-3 border-white/5 transition-all hover:border-cyan-500/50">
+                      <div class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-cyan-400">
+                        <i class="fas fa-code"></i>
+                      </div>
+                      <span class="text-[10px] font-bold uppercase">Web Dev</span>
+                    </div>
+                  </label>
+                  <label class="service-card-item cursor-pointer">
+                    <input type="radio" name="service-radio" value="graphic" class="hidden">
+                    <div class="card-inner glass p-4 h-full flex flex-col items-center justify-center text-center gap-3 border-white/5 transition-all hover:border-blue-500/50">
+                      <div class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-blue-400">
+                        <i class="fas fa-paint-brush"></i>
+                      </div>
+                      <span class="text-[10px] font-bold uppercase">Design</span>
+                    </div>
+                  </label>
+                  <label class="service-card-item cursor-pointer">
+                    <input type="radio" name="service-radio" value="video" class="hidden">
+                    <div class="card-inner glass p-4 h-full flex flex-col items-center justify-center text-center gap-3 border-white/5 transition-all hover:border-purple-500/50">
+                      <div class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-purple-400">
+                        <i class="fas fa-video"></i>
+                      </div>
+                      <span class="text-[10px] font-bold uppercase">Video</span>
+                    </div>
+                  </label>
+                  <label class="service-card-item cursor-pointer">
+                    <input type="radio" name="service-radio" value="consult" class="hidden">
+                    <div class="card-inner glass p-4 h-full flex flex-col items-center justify-center text-center gap-3 border-white/5 transition-all hover:border-yellow-500/50">
+                      <div class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-yellow-400">
+                        <i class="fas fa-lightbulb"></i>
+                      </div>
+                      <span class="text-[10px] font-bold uppercase">Consult</span>
+                    </div>
+                  </label>
+                </div>
+                <input type="hidden" id="service" name="service" required>
+              </div>
+
+              <div class="form-group">
+                <label class="block text-sm font-bold uppercase tracking-widest text-slate-400 mb-6">2. Your Contact Details</label>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div class="relative">
+                    <i class="fas fa-user absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"></i>
+                    <input type="text" id="name" class="w-full bg-slate-900/50 border border-white/10 p-4 pl-12 rounded-xl focus:border-cyan-500 outline-none transition-all" placeholder="Full Name" required>
+                  </div>
+                  <div class="relative">
+                    <i class="fas fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"></i>
+                    <input type="email" id="email" class="w-full bg-slate-900/50 border border-white/10 p-4 pl-12 rounded-xl focus:border-cyan-500 outline-none transition-all" placeholder="Email Address" required>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="block text-sm font-bold uppercase tracking-widest text-slate-400 mb-6">3. Pick a suitable time</label>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div class="relative">
+                    <i class="fas fa-calendar-alt absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"></i>
+                    <input type="date" id="date" class="w-full bg-slate-900/50 border border-white/10 p-4 pl-12 rounded-xl focus:border-cyan-500 outline-none transition-all appearance-none" required>
+                  </div>
+                  <div class="relative">
+                    <i class="fas fa-clock absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"></i>
+                    <input type="time" id="time" class="w-full bg-slate-900/50 border border-white/10 p-4 pl-12 rounded-xl focus:border-cyan-500 outline-none transition-all appearance-none" required>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="block text-sm font-bold uppercase tracking-widest text-slate-400 mb-6">4. Share the vision (Optional)</label>
+                <textarea id="details" rows="4" class="w-full bg-slate-900/50 border border-white/10 p-4 rounded-xl focus:border-cyan-500 outline-none transition-all resize-none" placeholder="Tell us about your project or specific requirements..."></textarea>
+              </div>
+
+              <button type="submit" class="btn-primary w-full text-lg py-5 rounded-2xl flex items-center justify-center gap-3 group relative overflow-hidden">
+                <span class="relative z-10">Confirm Booking</span>
+                <i class="fas fa-arrow-right relative z-10 group-hover:translate-x-2 transition-transform"></i>
+                <div class="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              </button>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
   </section>

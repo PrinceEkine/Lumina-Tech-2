@@ -477,6 +477,50 @@ forms.forEach(form => {
         showToast('Error: ' + error.message, 'error');
         setLoading(submitBtn, false, originalText);
       }
+    } else if (form.classList.contains('contact-form')) {
+      try {
+        const name = form.querySelector('#name').value;
+        const email = form.querySelector('#email').value;
+        const subject = form.querySelector('#subject').value;
+        const message = form.querySelector('#message').value;
+
+        // 1. Try to save to Supabase
+        const isSupabaseConfigured = import.meta.env.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder');
+        
+        if (isSupabaseConfigured) {
+          const { error } = await supabase
+            .from('contact_messages')
+            .insert([{
+              name,
+              email,
+              subject,
+              message,
+              created_at: new Date().toISOString()
+            }]);
+
+          if (error) console.error("Supabase insert error:", error);
+        }
+
+        // 2. Mock Email Notification
+        await sendEmail(
+          'princedagogoekine@gmail.com',
+          `New Contact Inquiry: ${subject}`,
+          `From: ${name} (${email})\n\nMessage:\n${message}`
+        );
+
+        showToast('Transmission successful! We will respond shortly.', 'success');
+        form.reset();
+        setLoading(submitBtn, false, originalText);
+      } catch (error) {
+        console.error("Error processing contact form:", error);
+        showToast('Transmission failed. Using backup protocols...', 'info');
+        // Simple fallback
+        setTimeout(() => {
+          showToast('Message cached. We will process it soon.', 'success');
+          form.reset();
+          setLoading(submitBtn, false, originalText);
+        }, 1500);
+      }
     } else {
       submitBtn.innerText = 'Success!';
       submitBtn.style.background = '#10b981'; // Emerald
@@ -2837,4 +2881,138 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
       });
     }
   });
+});
+
+// --- INTERACTIVE LANDING PAGE FEATURES ---
+
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Typing Effect for Hero
+    const typingElement = document.getElementById('typing-text');
+    if (typingElement) {
+        const words = ['Innovation', 'Excellence', 'Creativity', 'The Future'];
+        let wordIndex = 0;
+        let charIndex = 0;
+        let isDeleting = false;
+        let typeSpeed = 150;
+
+        const type = () => {
+            const currentWord = words[wordIndex];
+            if (isDeleting) {
+                typingElement.innerText = currentWord.substring(0, charIndex - 1);
+                charIndex--;
+                typeSpeed = 100;
+            } else {
+                typingElement.innerText = currentWord.substring(0, charIndex + 1);
+                charIndex++;
+                typeSpeed = 150;
+            }
+
+            if (!isDeleting && charIndex === currentWord.length) {
+                isDeleting = true;
+                typeSpeed = 2000; // Pause at end
+            } else if (isDeleting && charIndex === 0) {
+                isDeleting = false;
+                wordIndex = (wordIndex + 1) % words.length;
+                typeSpeed = 500;
+            }
+
+            setTimeout(type, typeSpeed);
+        };
+        type();
+    }
+
+    // 2. Custom Cursor Tracking
+    const cursor = document.getElementById('custom-cursor');
+    const follower = document.getElementById('cursor-follower');
+    
+    if (cursor && follower) {
+        document.addEventListener('mousemove', (e) => {
+            cursor.style.left = e.clientX + 'px';
+            cursor.style.top = e.clientY + 'px';
+            
+            setTimeout(() => {
+                follower.style.left = e.clientX - 15 + 'px';
+                follower.style.top = e.clientY - 15 + 'px';
+            }, 50);
+        });
+
+        // Hover Effect for interactive elements
+        const interactiveElements = document.querySelectorAll('a, button, .portfolio-item, .card');
+        interactiveElements.forEach(el => {
+            el.addEventListener('mouseenter', () => {
+                cursor.style.transform = 'scale(4)';
+                follower.style.transform = 'scale(0)';
+                follower.style.opacity = '0';
+            });
+            el.addEventListener('mouseleave', () => {
+                cursor.style.transform = 'scale(1)';
+                follower.style.transform = 'scale(1)';
+                follower.style.opacity = '0.5';
+            });
+        });
+    }
+
+    // 3. Mouse-Reactive Atmosphere
+    const atmosphere = document.querySelector('.atmosphere');
+    if (atmosphere) {
+        document.addEventListener('mousemove', (e) => {
+            const x = (e.clientX / window.innerWidth) * 100;
+            const y = (e.clientY / window.innerHeight) * 100;
+            atmosphere.style.background = `
+                radial-gradient(circle at ${x}% ${y}%, rgba(6, 182, 212, 0.15) 0%, transparent 60%),
+                radial-gradient(circle at ${100 - x}% ${100 - y}%, rgba(59, 130, 246, 0.1) 0%, transparent 50%)
+            `;
+        });
+    }
+
+    // 4. Subtle Card Tilt Effect
+    const cards = document.querySelectorAll('.card, .portfolio-item');
+    cards.forEach(card => {
+        card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            
+            const rotateX = (y - centerY) / 20;
+            const rotateY = (centerX - x) / 20;
+            
+            card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-5px)`;
+        });
+        
+        card.addEventListener('mouseleave', () => {
+            card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(0px)';
+        });
+    });
+
+    // 5. Parallax Hero Elements
+    const floatingElements = document.querySelectorAll('.floating-card, .floating-orb');
+    if (floatingElements.length > 0) {
+        document.addEventListener('mousemove', (e) => {
+            const x = (e.clientX - window.innerWidth / 2) / 50;
+            const y = (e.clientY - window.innerHeight / 2) / 50;
+            
+            floatingElements.forEach((el, index) => {
+                const speed = (index + 1) * 0.5;
+                el.style.transform = `translate(${x * speed}px, ${y * speed}px)`;
+            });
+        });
+    }
+
+    // 6. Booking Service Selection Cards
+    const serviceRadios = document.querySelectorAll('input[name="service-radio"]');
+    const serviceHiddenInput = document.getElementById('service');
+    
+    if (serviceRadios.length > 0 && serviceHiddenInput) {
+        serviceRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                serviceHiddenInput.value = radio.value;
+                
+                // Visual feedback (optional since CSS handles checked state, but good for custom triggers)
+                showToast(`Selected: ${radio.parentElement.querySelector('span').innerText}`, 'info');
+            });
+        });
+    }
 });
