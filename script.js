@@ -118,13 +118,29 @@ try {
   }
 } catch (e) { console.warn("intlTelInput failed:", e); }
 
+// Global User State
+let myId = null;
+let userRole = 'Staff';
+let userName = 'Staff';
+let userUsername = '';
+let typingTimeout = null;
+let chatChannel = null;
+
 // Auth State Listener
 try {
   if (supabase && supabase.auth) {
     supabase.auth.onAuthStateChange(async (event, session) => {
       const user = session?.user;
+      myId = user?.id;
       const path = window.location.pathname;
+      const isHome = path === '/' || path.includes('index.html');
       const isUserAdmin = await isAdmin(user);
+      
+      // Auto-redirect from home to admin if logged in
+      if (user && isHome) {
+        window.location.href = '/admin.html';
+        return;
+      }
       
       // Show/hide currency selector based on login status
       if (user) {
@@ -146,9 +162,9 @@ try {
         }
 
         // Determine Role
-        let userRole = 'Staff';
-        let userName = user.user_metadata?.full_name || user.email.split('@')[0];
-        let userUsername = user.user_metadata?.username || user.email.split('@')[0];
+        userRole = 'Staff';
+        userName = user.user_metadata?.full_name || user.email.split('@')[0];
+        userUsername = user.user_metadata?.username || user.email.split('@')[0];
 
         if (isUserAdmin) {
           userRole = 'Admin';
@@ -206,16 +222,18 @@ try {
         if (settingsEmail) settingsEmail.value = user.email;
 
         // Initial Data Fetch
-        if (userRole === 'Admin') {
-          fetchDashboardStats();
-          fetchBookings();
-          fetchStaff();
-          fetchStaffForDropdown();
-          fetchAdminTasks();
-        } else {
-          fetchMyTasks();
-          fetchStaffDashboardStats();
-          checkTaskReminders();
+      if (userRole === 'Admin') {
+        fetchDashboardStats();
+        fetchBookings();
+        fetchStaff();
+        fetchStaffForDropdown();
+        fetchAdminTasks();
+        fetchNotifications();
+      } else {
+        fetchMyTasks();
+        fetchStaffDashboardStats();
+        fetchNotifications();
+        checkTaskReminders();
           
           // Task Status Filter Event Listener
           const taskStatusFilter = document.getElementById('task-status-filter');
@@ -330,6 +348,28 @@ forms.forEach(form => {
         const user = data.user;
         const isUserAdmin = await isAdmin(user);
         
+        // 1. Ensure user (especially Admin) is in the staff table so they show up in chat
+        try {
+          const { data: existingStaff } = await supabase
+            .from('staff')
+            .select('id')
+            .eq('email', user.email)
+            .maybeSingle();
+
+          if (!existingStaff) {
+            await supabase.from('staff').insert([{
+              id: user.id,
+              name: user.user_metadata?.full_name || user.email.split('@')[0],
+              email: user.email,
+              role: isUserAdmin ? 'Admin' : 'Staff',
+              status: 'Active',
+              created_at: new Date().toISOString()
+            }]);
+          }
+        } catch ( staffErr ) {
+          console.error("Auto-registration failed:", staffErr);
+        }
+
         // Set admin session flag for UI consistency
         if (isUserAdmin) {
           localStorage.setItem('isAdminSession', 'true');
@@ -701,6 +741,13 @@ async function fetchChatContacts() {
 
     chatContactList.innerHTML = globalItem;
 
+    if (staff.length <= (staff.some(s => s.id === myId) ? 1 : 0)) {
+      const emptyMsg = document.createElement('div');
+      emptyMsg.className = 'p-8 text-center text-slate-500 text-xs';
+      emptyMsg.innerText = 'No other team members found.';
+      chatContactList.appendChild(emptyMsg);
+    }
+
     staff.forEach(person => {
       // Don't show self in contact list
       if (person.id === myId) return;
@@ -773,37 +820,58 @@ async function fetchChatContacts() {
 async function fetchChatMessages() {
   if (!chatMessages) return;
   
+  const currentMyId = myId || (await supabase.auth.getUser()).data.user?.id || 'admin-session';
+
   try {
-    const user = (await supabase.auth.getUser()).data.user;
-    const myId = user?.id || 'admin-session';
-    
     let query = supabase.from('messages').select('*');
 
     if (activeRecipient === 'global') {
       query = query.is('recipient_id', null);
     } else {
-      // One-on-one: messages where (sender=me AND recipient=them) OR (sender=them AND recipient=me)
-      query = query.or(`and(sender_id.eq.${myId},recipient_id.eq.${activeRecipient}),and(sender_id.eq.${activeRecipient},recipient_id.eq.${myId})`);
+      query = query.or(`and(sender_id.eq.${currentMyId},recipient_id.eq.${activeRecipient}),and(sender_id.eq.${activeRecipient},recipient_id.eq.${currentMyId})`);
     }
 
     const { data, error } = await query.order('created_at', { ascending: true });
 
     if (error) throw error;
 
+    // Mark messages as read if I'm the recipient
+    if (activeRecipient !== 'global' && data.length > 0) {
+      const unreadIds = data
+        .filter(m => m.recipient_id === currentMyId && m.status !== 'read')
+        .map(m => m.id);
+      
+      if (unreadIds.length > 0) {
+        await supabase.from('messages').update({ status: 'read' }).in('id', unreadIds);
+      }
+    }
+
     chatMessages.innerHTML = '';
     if (data.length === 0) {
       chatMessages.innerHTML = `<div class="text-center py-12 text-slate-500">No messages with ${activeChatName.innerText} yet.</div>`;
     } else {
       data.forEach(msg => {
-        const isMe = msg.sender_id === myId;
+        const isMe = msg.sender_id === currentMyId;
         const msgDiv = document.createElement('div');
         msgDiv.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'}`;
+        
+        let statusHtml = '';
+        if (isMe && activeRecipient !== 'global') {
+          const isRead = msg.status === 'read';
+          statusHtml = `<span class="text-[8px] mt-1 ${isRead ? 'text-cyan-400' : 'text-slate-500'}">
+            <i class="fas ${isRead ? 'fa-check-double' : 'fa-check'}"></i> ${isRead ? 'Read' : 'Sent'}
+          </span>`;
+        }
+
         msgDiv.innerHTML = `
-          <div class="max-w-[80%] p-3 rounded-xl ${isMe ? 'bg-cyan-500 text-black' : 'bg-white/10 text-white'}">
+          <div class="max-w-[80%] p-3 rounded-xl ${isMe ? 'bg-cyan-500 text-black' : 'bg-white/10 text-white'} relative">
             ${activeRecipient === 'global' ? `<p class="text-[10px] opacity-60 mb-1">${msg.sender_name}</p>` : ''}
             <p class="text-sm">${msg.content}</p>
           </div>
-          <span class="text-[10px] text-slate-500 mt-1">${new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] text-slate-500 mt-1">${new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+            ${statusHtml}
+          </div>
         `;
         chatMessages.appendChild(msgDiv);
       });
@@ -812,6 +880,24 @@ async function fetchChatMessages() {
   } catch (err) {
     console.error("Error fetching chat:", err);
   }
+}
+
+if (chatInput) {
+  chatInput.addEventListener('input', () => {
+    if (activeRecipient === 'global') return;
+    
+    if (chatChannel) {
+      chatChannel.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: {
+          senderId: myId,
+          senderName: userName,
+          recipientId: activeRecipient
+        }
+      });
+    }
+  });
 }
 
 if (teamChatForm) {
@@ -1504,29 +1590,53 @@ window.deleteMedia = async (id, name) => {
 
 // --- REAL-TIME SYNC LOGIC ---
 function setupRealtimeSubscriptions() {
+  const typingIndicator = document.getElementById('typing-indicator');
+  const typingText = document.getElementById('typing-text');
+
   // Sync Chat
-  supabase
-    .channel('public:messages')
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async payload => {
+  chatChannel = supabase.channel('public:messages')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, async payload => {
       const user = (await supabase.auth.getUser()).data.user;
-      const myId = user?.id || 'admin-session';
+      const currentMyId = user?.id || 'admin-session';
       const msg = payload.new;
 
-      // Only refresh if relevant to current chat
-      const isGlobal = activeRecipient === 'global' && !msg.recipient_id;
-      const isPrivate = (activeRecipient === msg.sender_id && msg.recipient_id === myId) || 
-                        (activeRecipient === msg.recipient_id && msg.sender_id === myId);
-
-      if (chatView && !chatView.classList.contains('hidden') && (isGlobal || isPrivate)) {
-        fetchChatMessages();
+      // Handle Read Receipt Updates
+      if (payload.eventType === 'UPDATE') {
+        if (msg.sender_id === currentMyId && msg.recipient_id === activeRecipient) {
+          fetchChatMessages();
+        }
+        return;
       }
-      
-      // Show notification if it's for me and I'm not looking at it
-      const forMe = msg.recipient_id === myId || (!msg.recipient_id && myId !== msg.sender_id);
-      const notLooking = chatView.classList.contains('hidden') || !isPrivate && !isGlobal;
 
-      if (forMe && notLooking) {
-        addNotification('New Message', `${msg.sender_name}: ${msg.content.substring(0, 30)}...`, 'Chat');
+      // Handle New Messages
+      if (payload.eventType === 'INSERT') {
+        const isGlobal = activeRecipient === 'global' && !msg.recipient_id;
+        const isPrivate = (activeRecipient === msg.sender_id && msg.recipient_id === currentMyId) || 
+                          (activeRecipient === msg.recipient_id && msg.sender_id === currentMyId);
+
+        if (chatView && !chatView.classList.contains('hidden') && (isGlobal || isPrivate)) {
+          fetchChatMessages();
+        }
+        
+        const forMe = msg.recipient_id === currentMyId || (!msg.recipient_id && currentMyId !== msg.sender_id);
+        const notLooking = chatView.classList.contains('hidden') || !isPrivate && !isGlobal;
+
+        if (forMe && notLooking) {
+          addNotification('New Message', `${msg.sender_name}: ${msg.content.substring(0, 30)}...`, 'Chat');
+        }
+      }
+    })
+    .on('broadcast', { event: 'typing' }, payload => {
+      if (activeRecipient === payload.payload.senderId && payload.payload.recipientId === myId) {
+        if (typingIndicator && typingText) {
+          typingText.innerText = `${payload.payload.senderName} is typing...`;
+          typingIndicator.classList.remove('hidden');
+          
+          clearTimeout(window.typingTimer);
+          window.typingTimer = setTimeout(() => {
+            typingIndicator.classList.add('hidden');
+          }, 3000);
+        }
       }
     })
     .subscribe();
@@ -2203,7 +2313,10 @@ if (toggleEmailNotif && toggleSystemNotif && saveNotifBtn) {
 }
 
 function updateToggleUI(toggleEl, isActive) {
+  if (!toggleEl) return;
   const dot = toggleEl.querySelector('.toggle-dot');
+  if (!dot) return;
+  
   if (isActive) {
     toggleEl.classList.remove('bg-slate-700');
     toggleEl.classList.add('bg-cyan-500');
@@ -2215,6 +2328,47 @@ function updateToggleUI(toggleEl, isActive) {
     dot.classList.remove('right-1');
     dot.classList.add('left-1');
   }
+}
+
+// Password Change Form
+const changePasswordForm = document.getElementById('change-password-form');
+if (changePasswordForm) {
+  changePasswordForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const submitBtn = changePasswordForm.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerText;
+    
+    const newPassword = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-password').value;
+    
+    if (newPassword !== confirmPassword) {
+      showToast('Passwords do not match', 'error');
+      return;
+    }
+    
+    if (newPassword.length < 6) {
+      showToast('Password must be at least 6 characters', 'error');
+      return;
+    }
+    
+    setLoading(submitBtn, true);
+    
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+      
+      if (error) throw error;
+      
+      showToast('Password updated successfully!', 'success');
+      changePasswordForm.reset();
+    } catch (err) {
+      console.error("Password update failed:", err);
+      showToast(`Error: ${err.message}`, 'error');
+    } finally {
+      setLoading(submitBtn, false, originalText);
+    }
+  });
 }
 
 window.updateStatus = async (id, newStatus) => {
@@ -2508,39 +2662,44 @@ async function fetchAttendance() {
           <td>${clockIn}</td>
           <td>${clockOut}</td>
           <td>${hours}h</td>
-          <td><span class="status-badge ${record.clock_out ? 'status-completed' : 'status-pending'}">${record.status}</span></td>
+          <td><span class="status-badge ${record.clock_out ? 'status-completed' : (record.status === 'Late' ? 'bg-orange-500/10 text-orange-400' : 'status-pending')}">${record.status}</span></td>
         `;
         attendanceHistoryBody.appendChild(tr);
       });
     }
 
-    // Admin View: All Staff Attendance
-    const isAdmin = localStorage.getItem('isAdminSession') === 'true';
-    if (isAdmin && adminAttendanceBody) {
-      const { data: allAttendance, error: allAttendanceError } = await supabase
-        .from('attendance')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(20);
+      // Admin View: All Staff Attendance
+      const isAdmin = localStorage.getItem('isAdminSession') === 'true';
+      if (isAdmin && adminAttendanceBody) {
+        const { data: allAttendance, error: allAttendanceError } = await supabase
+          .from('attendance')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(50);
 
-      if (allAttendanceError) throw allAttendanceError;
+        if (allAttendanceError) throw allAttendanceError;
 
-      adminAttendanceBody.innerHTML = '';
-      allAttendance.forEach(record => {
-        const tr = document.createElement('tr');
-        const clockIn = new Date(record.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const clockOut = record.clock_out ? new Date(record.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
-        
-        tr.innerHTML = `
-          <td>${record.staff_name || 'Unknown'}</td>
-          <td>${record.date}</td>
-          <td>${clockIn}</td>
-          <td>${clockOut}</td>
-          <td><span class="status-badge ${record.clock_out ? 'status-completed' : 'status-pending'}">${record.status}</span></td>
-        `;
-        adminAttendanceBody.appendChild(tr);
-      });
-    }
+        adminAttendanceBody.innerHTML = '';
+        allAttendance.forEach(record => {
+          const tr = document.createElement('tr');
+          const clockIn = new Date(record.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const clockOut = record.clock_out ? new Date(record.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
+          
+          tr.innerHTML = `
+            <td>${record.staff_name || 'Unknown'}</td>
+            <td>${record.date}</td>
+            <td>${clockIn}</td>
+            <td>${clockOut}</td>
+            <td><span class="status-badge ${record.clock_out ? 'status-completed' : (record.status === 'Late' ? 'bg-orange-500/10 text-orange-400' : 'status-pending')}">${record.status}</span></td>
+            <td>
+              <button onclick="deleteAttendanceRecord('${record.id}')" class="text-red-400 hover:text-red-300">
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            </td>
+          `;
+          adminAttendanceBody.appendChild(tr);
+        });
+      }
 
   } catch (err) {
     console.error("Error fetching attendance:", err);
@@ -2553,24 +2712,31 @@ if (clockInBtn) {
     try {
       const userResponse = await supabase.auth.getUser();
       const user = userResponse.data.user;
-      if (!user) return;
+      if (!user) {
+        showToast('You must be logged in to clock in', 'error');
+        return;
+      }
 
-      const staffName = user.user_metadata?.full_name || user.email.split('@')[0];
+      const staffName = user.user_metadata?.full_name || userName || user.email.split('@')[0];
       const today = new Date().toISOString().split('T')[0];
+      
+      // Late Check: After 9:00 AM
+      const now = new Date();
+      const isLate = now.getHours() >= 9 && now.getMinutes() > 0;
 
       const { error } = await supabase
         .from('attendance')
         .insert([{
           staff_id: user.id,
           staff_name: staffName,
-          clock_in: new Date().toISOString(),
+          clock_in: now.toISOString(),
           date: today,
-          status: 'Present'
+          status: isLate ? 'Late' : 'Present'
         }]);
 
       if (error) throw error;
 
-      showToast('Clocked in successfully!', 'success');
+      showToast(`Clocked in successfully! ${isLate ? '(Marked as Late)' : ''}`, isLate ? 'warning' : 'success');
       fetchAttendance();
     } catch (err) {
       console.error("Error clocking in:", err);
@@ -2578,6 +2744,24 @@ if (clockInBtn) {
     }
   });
 }
+
+window.deleteAttendanceRecord = async (id) => {
+  if (!confirm('Are you sure you want to delete this attendance record?')) return;
+  
+  try {
+    const { error } = await supabase
+      .from('attendance')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    showToast('Record deleted', 'success');
+    fetchAttendance();
+  } catch (err) {
+    console.error("Error deleting record:", err);
+    showToast('Delete failed', 'error');
+  }
+};
 
 if (clockOutBtn) {
   clockOutBtn.addEventListener('click', async () => {
@@ -2644,9 +2828,25 @@ if (notificationBell && notificationDropdown) {
 }
 
 if (clearNotificationsBtn && notificationList) {
-  clearNotificationsBtn.addEventListener('click', () => {
-    notificationList.innerHTML = '<p class="text-center text-slate-500 text-xs py-4">No new notifications</p>';
-    if (notificationBadge) notificationBadge.classList.add('hidden');
+  clearNotificationsBtn.addEventListener('click', async () => {
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      notificationList.innerHTML = '<p class="text-center text-slate-500 py-4 text-xs">No new notifications</p>';
+      if (notificationBadge) notificationBadge.classList.add('hidden');
+      showToast('Notifications cleared', 'success');
+    } catch (err) {
+      console.error("Error clearing notifications:", err);
+      showToast('Failed to clear notifications', 'error');
+    }
   });
 }
 
@@ -2655,12 +2855,16 @@ async function fetchAdminTasks() {
   const adminTaskTableBody = document.getElementById('admin-tasks-table-body');
   if (!adminTaskTableBody) return;
 
+  adminTaskTableBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-slate-500"><span class="spinner inline-block mr-2"></span> Loading tasks...</td></tr>';
+
   try {
     // Fetch all staff first to create a map for names
-    const { data: staffList } = await supabase
+    const { data: staffList, error: staffError } = await supabase
       .from('staff')
       .select('id, name');
     
+    if (staffError) throw staffError;
+
     const staffMap = {};
     if (staffList) {
       staffList.forEach(s => staffMap[s.id] = s.name);
@@ -2669,13 +2873,13 @@ async function fetchAdminTasks() {
     const { data: tasks, error } = await supabase
       .from('tasks')
       .select('*')
-      .order('due_date', { ascending: true });
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
 
     adminTaskTableBody.innerHTML = '';
-    if (tasks.length === 0) {
-      adminTaskTableBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-slate-500">No tasks assigned yet</td></tr>';
+    if (!tasks || tasks.length === 0) {
+      adminTaskTableBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-slate-500">No tasks assigned yet.</td></tr>';
       return;
     }
 
@@ -2775,29 +2979,89 @@ async function checkTaskReminders() {
   }
 }
 
-function addNotification(title, message, tag) {
+async function fetchNotifications() {
   const notificationList = document.getElementById('notification-list');
   const notificationBadge = document.getElementById('notification-badge');
   if (!notificationList) return;
 
-  // Remove "No new notifications" if it exists
-  if (notificationList.innerText.includes('No new notifications')) {
-    notificationList.innerHTML = '';
-  }
+  try {
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) return;
 
-  const div = document.createElement('div');
-  div.className = 'p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer';
-  div.innerHTML = `
-    <div class="flex justify-between items-start mb-1">
-      <p class="text-sm font-semibold">${title}</p>
-      <span class="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 font-bold">${tag}</span>
-    </div>
-    <p class="text-xs text-slate-400">${message}</p>
-    <span class="text-[10px] text-slate-500">Just now</span>
-  `;
-  
-  notificationList.prepend(div);
-  if (notificationBadge) notificationBadge.classList.remove('hidden');
+    const { data: notifications, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (error) throw error;
+
+    notificationList.innerHTML = '';
+    
+    if (!notifications || notifications.length === 0) {
+      notificationList.innerHTML = '<p class="text-center text-slate-500 py-4 text-xs">No new notifications</p>';
+      if (notificationBadge) notificationBadge.classList.add('hidden');
+      return;
+    }
+
+    const unreadCount = notifications.filter(n => !n.read).length;
+    if (notificationBadge) {
+      if (unreadCount > 0) {
+        notificationBadge.classList.remove('hidden');
+      } else {
+        notificationBadge.classList.add('hidden');
+      }
+    }
+
+    notifications.forEach(notif => {
+      const div = document.createElement('div');
+      div.className = `p-3 rounded-lg border border-white/5 hover:bg-white/5 transition-colors cursor-pointer ${notif.read ? 'opacity-60' : 'bg-white/5'}`;
+      div.innerHTML = `
+        <div class="flex justify-between items-start mb-1">
+          <p class="text-sm font-semibold">${notif.title}</p>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold">${notif.tag || 'Info'}</span>
+        </div>
+        <p class="text-xs text-slate-400">${notif.message}</p>
+        <span class="text-[10px] text-slate-500 mt-1 block">${new Date(notif.created_at).toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</span>
+      `;
+      
+      div.onclick = async () => {
+        if (!notif.read) {
+          await supabase.from('notifications').update({ read: true }).eq('id', notif.id);
+          fetchNotifications();
+        }
+      };
+      
+      notificationList.appendChild(div);
+    });
+  } catch (error) {
+    console.error("Error fetching notifications:", error);
+    notificationList.innerHTML = '<p class="text-center text-red-400 py-4 text-xs">Error loading notifications</p>';
+  }
+}
+
+async function addNotification(title, message, tag) {
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) return;
+
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .insert([{
+        user_id: user.id,
+        title,
+        message,
+        tag,
+        read: false,
+        created_at: new Date().toISOString()
+      }]);
+
+    if (error) throw error;
+    fetchNotifications();
+  } catch (error) {
+    console.error("Error adding notification:", error);
+  }
 }
 
 // --- Task Detail Modal Logic ---
@@ -2992,11 +3256,34 @@ if (addBlogBtn && blogModal && closeBlogModal) {
     document.getElementById('blog-modal-title').innerHTML = 'Create <span class="text-cyan-400">New Post</span>';
     blogForm.reset();
     document.getElementById('blog-id').value = '';
+    document.getElementById('blog-image-preview').innerHTML = '<i class="fas fa-image text-slate-600 text-2xl"></i>';
+    document.getElementById('blog-file-name').innerText = 'No file chosen';
     blogModal.classList.remove('hidden');
   });
 
   closeBlogModal.addEventListener('click', () => {
     blogModal.classList.add('hidden');
+  });
+}
+
+// Blog Image Preview Logic
+const blogImageFile = document.getElementById('blog-image-file');
+const blogImagePreview = document.getElementById('blog-image-preview');
+const blogFileName = document.getElementById('blog-file-name');
+const blogImageUrlInput = document.getElementById('blog-image-url');
+
+if (blogImageFile) {
+  blogImageFile.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      blogFileName.innerText = file.name;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        blogImagePreview.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
+        blogImageUrlInput.value = e.target.result; // Store base64 in hidden input
+      };
+      reader.readAsDataURL(file);
+    }
   });
 }
 
@@ -3010,6 +3297,11 @@ if (blogForm) {
     const excerpt = document.getElementById('blog-excerpt').value;
     const content = document.getElementById('blog-content').value;
 
+    if (!imageUrl) {
+      showToast('Please upload a featured image', 'error');
+      return;
+    }
+
     setLoading(true);
     try {
       const blogData = {
@@ -3018,14 +3310,14 @@ if (blogForm) {
         image_url: imageUrl,
         excerpt,
         content,
-        updated_at: new Date()
+        updated_at: new Date().toISOString()
       };
 
       let error;
       if (id) {
         ({ error } = await supabase.from('blogs').update(blogData).eq('id', id));
       } else {
-        blogData.created_at = new Date();
+        blogData.created_at = new Date().toISOString();
         ({ error } = await supabase.from('blogs').insert([blogData]));
       }
 
@@ -3059,6 +3351,14 @@ window.editBlog = async (id) => {
     document.getElementById('blog-image-url').value = blog.image_url;
     document.getElementById('blog-excerpt').value = blog.excerpt;
     document.getElementById('blog-content').value = blog.content;
+
+    if (blog.image_url) {
+      document.getElementById('blog-image-preview').innerHTML = `<img src="${blog.image_url}" class="w-full h-full object-cover">`;
+      document.getElementById('blog-file-name').innerText = 'Existing Image';
+    } else {
+      document.getElementById('blog-image-preview').innerHTML = '<i class="fas fa-image text-slate-600 text-2xl"></i>';
+      document.getElementById('blog-file-name').innerText = 'No file chosen';
+    }
 
     document.getElementById('blog-modal-title').innerHTML = 'Edit <span class="text-cyan-400">Post</span>';
     blogModal.classList.remove('hidden');

@@ -428,6 +428,7 @@
                   <th>Clock In</th>
                   <th>Clock Out</th>
                   <th>Status</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody id="admin-attendance-body">
@@ -848,8 +849,20 @@
                 </div>
               </div>
               <div>
-                <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Image URL</label>
-                <input type="url" id="blog-image-url" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none" placeholder="https://picsum.photos/seed/..." required>
+                <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Featured Image</label>
+                <div class="flex items-center gap-4">
+                  <div id="blog-image-preview" class="w-20 h-20 rounded bg-slate-800 border border-slate-700 flex items-center justify-center overflow-hidden">
+                    <i class="fas fa-image text-slate-600 text-2xl"></i>
+                  </div>
+                  <div class="flex-1">
+                    <input type="file" id="blog-image-file" class="hidden" accept="image/*">
+                    <button type="button" onclick="document.getElementById('blog-image-file').click()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-2 px-4 rounded border border-slate-700 transition-all">
+                      Choose Image File
+                    </button>
+                    <p id="blog-file-name" class="text-[10px] text-slate-500 mt-2 truncate max-w-[200px]">No file chosen</p>
+                    <input type="hidden" id="blog-image-url">
+                  </div>
+                </div>
               </div>
               <div>
                 <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Short Description</label>
@@ -975,9 +988,21 @@
               </div>
             </div>
             
-            <div id="chat-messages" class="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
+            <div id="chat-messages" class="flex-1 overflow-y-auto p-6 flex flex-col gap-4 relative">
               <!-- Messages will be populated here -->
               <div class="text-center py-12 text-slate-500">Select a contact to start chatting</div>
+            </div>
+
+            <!-- Typing Indicator -->
+            <div id="typing-indicator" class="px-6 py-2 h-8 hidden">
+              <p class="text-[10px] text-cyan-400 italic flex items-center gap-2">
+                <span class="flex gap-1">
+                  <span class="w-1 h-1 bg-cyan-400 rounded-full animate-bounce"></span>
+                  <span class="w-1 h-1 bg-cyan-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                  <span class="w-1 h-1 bg-cyan-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+                </span>
+                <span id="typing-text">Someone is typing...</span>
+              </p>
             </div>
 
             <div class="p-4 border-t border-white/10 bg-slate-900/50">
@@ -1106,7 +1131,17 @@
               <div class="flex-1">
                 <p class="font-bold mb-2">Change Password</p>
                 <p class="text-sm text-slate-400 mb-4">Ensure your account is using a long, random password to stay secure.</p>
-                <button class="glass px-6 py-2 rounded-lg hover:text-cyan-400 transition-colors">Update Password</button>
+                <form id="change-password-form" class="flex flex-col gap-4 max-w-sm">
+                  <div class="form-group">
+                    <label>New Password</label>
+                    <input type="password" id="new-password" required class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2">
+                  </div>
+                  <div class="form-group">
+                    <label>Confirm Password</label>
+                    <input type="password" id="confirm-password" required class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2">
+                  </div>
+                  <button type="submit" class="btn-primary">Update Password</button>
+                </form>
               </div>
               <div class="flex-1">
                 <p class="font-bold mb-2 text-red-400">Danger Zone</p>
@@ -1210,6 +1245,7 @@
           </div>
         </div>
       </div>
+      <!-- Camera Modal -->
     </main>
   </div>
 

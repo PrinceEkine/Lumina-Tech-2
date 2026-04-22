@@ -42,7 +42,7 @@ export const checkSession = async (requiredRole = null) => {
   const isUserAdmin = await isAdmin(user);
   
   if (requiredRole === 'admin' && !isUserAdmin) {
-    window.location.href = '/staff.html'; // Redirect non-admins to staff portal
+    window.location.href = '/admin.html'; // Both roles now use admin.html with visibility classes
     return null;
   }
 

@@ -608,10 +608,8 @@ body.light-mode .btn-secondary {
   display: none;
 }
 
-body.is-admin .admin-only {
-  display: block;
-}
-
+body.is-admin .admin-only,
+body.is-admin .staff-only,
 body.is-staff .staff-only {
   display: block;
 }
