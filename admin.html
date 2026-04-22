@@ -758,6 +758,10 @@
                 <label>Due Date</label>
                 <input type="date" id="task-due-date" required class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2">
               </div>
+              <div class="form-group flex items-center gap-3 pt-6">
+                <input type="checkbox" id="task-reminders" class="w-5 h-5 accent-cyan-500 bg-slate-900 border-slate-800 rounded">
+                <label for="task-reminders" class="text-sm cursor-pointer">Enable email reminders (2 days before)</label>
+              </div>
             </div>
             <div class="form-group mb-8">
               <label>Description</label>
@@ -1191,6 +1195,15 @@
             </div>
             <button type="submit" class="btn-primary w-full">Post Now</button>
           </form>
+        </div>
+      </div>
+      <!-- Task Detail Modal -->
+      <div id="task-detail-modal" class="modal-overlay">
+        <div class="modal-content glass max-w-lg w-full">
+          <span id="task-detail-close" class="modal-close"><i class="fas fa-times"></i></span>
+          <div id="task-detail-content">
+            <!-- Content populated by JS -->
+          </div>
         </div>
       </div>
     </main>

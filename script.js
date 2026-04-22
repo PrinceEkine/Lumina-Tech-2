@@ -1628,6 +1628,7 @@ if (assignTaskForm) {
         priority: document.getElementById('task-priority').value,
         due_date: document.getElementById('task-due-date').value,
         description: document.getElementById('task-description').value,
+        reminders: document.getElementById('task-reminders')?.checked || false,
         status: 'pending',
         created_at: new Date().toISOString()
       };
@@ -1703,9 +1704,11 @@ async function fetchMyTasks() {
 
     tasks.forEach(task => {
       const tr = document.createElement('tr');
+      tr.className = 'cursor-pointer hover:bg-white/5 transition-colors';
+      tr.onclick = (e) => {
+        if (e.target.tagName !== 'SELECT') showTaskDetails(task.id);
+      };
       const priorityClass = `priority-${task.priority.toLowerCase()}`;
-      
-      const dueDate = new Date(task.due_date);
       dueDate.setHours(0, 0, 0, 0);
       const isOverdue = dueDate < today && task.status !== 'completed';
       
@@ -1758,9 +1761,16 @@ async function fetchMyTasks() {
 
 window.updateTaskStatus = async (id, newStatus) => {
   try {
+    const updateData = { status: newStatus };
+    if (newStatus === 'completed') {
+      updateData.completion_date = new Date().toISOString();
+    } else {
+      updateData.completion_date = null;
+    }
+
     const { error } = await supabase
       .from('tasks')
-      .update({ status: newStatus })
+      .update(updateData)
       .eq('id', id);
 
     if (error) throw error;
@@ -2563,6 +2573,11 @@ async function fetchAdminTasks() {
 
     tasks.forEach(task => {
       const tr = document.createElement('tr');
+      tr.className = 'cursor-pointer hover:bg-white/5 transition-colors';
+      tr.onclick = (e) => {
+        if (!e.target.closest('button')) showTaskDetails(task.id);
+      };
+      
       const priorityClass = `priority-${task.priority.toLowerCase()}`;
       const statusClass = task.status === 'completed' ? 'status-completed' : 'status-pending';
       const assigneeName = staffMap[task.assignee_id] || 'Unknown';
@@ -2635,6 +2650,9 @@ async function checkTaskReminders() {
     const twoDaysFromNow = new Date(now.getTime() + (2 * 24 * 60 * 60 * 1000));
 
     tasks.forEach(task => {
+      // Only check if reminders are enabled for this task
+      if (!task.reminders) return;
+
       const dueDate = new Date(task.due_date);
       if (dueDate <= twoDaysFromNow) {
         addNotification(
@@ -2673,6 +2691,102 @@ function addNotification(title, message, tag) {
   notificationList.prepend(div);
   if (notificationBadge) notificationBadge.classList.remove('hidden');
 }
+
+// --- Task Detail Modal Logic ---
+async function showTaskDetails(taskId) {
+  const modal = document.getElementById('task-detail-modal');
+  const content = document.getElementById('task-detail-content');
+  if (!modal || !content) return;
+
+  try {
+    const { data: task, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('id', taskId)
+      .single();
+
+    if (error) throw error;
+
+    const { data: staffList } = await supabase
+      .from('staff')
+      .select('name')
+      .eq('id', task.assignee_id);
+    
+    const staffName = staffList && staffList.length > 0 ? staffList[0].name : 'Unknown';
+
+    content.innerHTML = `
+      <div class="mb-6">
+        <div class="flex justify-between items-center mb-2">
+          <span class="badge glass">${task.category}</span>
+          <span class="priority-badge priority-${task.priority.toLowerCase()}">${task.priority}</span>
+        </div>
+        <h2 class="text-2xl font-bold">${task.title}</h2>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 mb-8">
+        <div class="glass p-4 rounded-xl">
+          <p class="text-[10px] text-slate-500 uppercase font-bold mb-1">Assignee</p>
+          <p class="font-bold">${staffName}</p>
+        </div>
+        <div class="glass p-4 rounded-xl">
+          <p class="text-[10px] text-slate-500 uppercase font-bold mb-1">Due Date</p>
+          <p class="font-bold text-cyan-400">${task.due_date}</p>
+        </div>
+        <div class="glass p-4 rounded-xl">
+          <p class="text-[10px] text-slate-500 uppercase font-bold mb-1">Status</p>
+          <p class="font-bold capitalize">${task.status}</p>
+        </div>
+        <div class="glass p-4 rounded-xl">
+          <p class="text-[10px] text-slate-500 uppercase font-bold mb-1">Reminders</p>
+          <p class="font-bold">${task.reminders ? 'Enabled' : 'Disabled'}</p>
+        </div>
+        ${task.completion_date ? `
+        <div class="glass p-4 rounded-xl col-span-2 border-emerald-500/20">
+          <p class="text-[10px] text-emerald-500 uppercase font-bold mb-1">Completed On</p>
+          <p class="font-bold text-emerald-400">${new Date(task.completion_date).toLocaleString()}</p>
+        </div>
+        ` : ''}
+      </div>
+
+      <div class="mb-8">
+        <h4 class="text-sm font-bold text-slate-400 uppercase mb-4 tracking-widest">Description</h4>
+        <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 min-h-[100px]">
+          <p class="text-slate-200 leading-relaxed">${task.description || 'No description provided.'}</p>
+        </div>
+      </div>
+      
+      <div class="flex gap-4">
+        <button id="close-detail-btn" class="btn-primary w-full py-3 rounded-xl font-bold">Close Details</button>
+      </div>
+    `;
+
+    modal.classList.add('show');
+    content.parentElement.classList.add('animate');
+    
+    document.getElementById('close-detail-btn')?.addEventListener('click', () => {
+      modal.classList.remove('show');
+    });
+  } catch (error) {
+    console.error("Error fetching task details:", error);
+    showToast("Could not load task details", "error");
+  }
+}
+
+// Global Modal handlers
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('task-detail-close')?.addEventListener('click', () => {
+        document.getElementById('task-detail-modal').classList.remove('show');
+    });
+
+    const taskDetailModal = document.getElementById('task-detail-modal');
+    if (taskDetailModal) {
+        window.addEventListener('click', (e) => {
+            if (e.target === taskDetailModal) {
+                taskDetailModal.classList.remove('show');
+            }
+        });
+    }
+});
 
 // Theme Toggle Logic removed from bottom
 // --- BLOG MANAGEMENT LOGIC ---

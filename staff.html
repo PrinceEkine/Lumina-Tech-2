@@ -167,8 +167,8 @@
     <main class="main-content">
       <header class="flex justify-between items-center mb-12">
         <div>
-          <h1 class="text-3xl font-bold">Hello, <span class="text-cyan-400">Staff Member</span></h1>
-          <p class="text-slate-400">You have 4 tasks to complete today.</p>
+          <h1 class="text-3xl font-bold">Hello, <span class="text-cyan-400" id="welcome-name">Staff Member</span></h1>
+          <p class="text-slate-400">You have <span id="task-count">0</span> tasks to complete today.</p>
         </div>
         <div class="flex gap-4 items-center">
           <select class="currency-selector glass bg-transparent border-none text-xs font-bold text-cyan-400 focus:outline-none cursor-pointer">
@@ -192,20 +192,18 @@
 
       <!-- Stats -->
       <div class="stats-grid">
-        <div class="stat-card glass">
-          <span class="text-slate-400 text-sm uppercase tracking-widest font-bold">Assigned Tasks</span>
-          <div class="stat-value">8</div>
-          <span class="text-cyan-400 text-xs font-bold">4 pending</span>
+        <div class="stat-card glass text-center">
+          <span class="text-slate-400 text-sm uppercase tracking-widest font-bold">Tasks Completed</span>
+          <div class="stat-value" id="staff-completed-tasks-stat">0</div>
         </div>
-        <div class="stat-card glass">
-          <span class="text-slate-400 text-sm uppercase tracking-widest font-bold">Hours Logged</span>
-          <div class="stat-value">32h</div>
-          <span class="text-emerald-400 text-xs font-bold">This week</span>
+        <div class="stat-card glass text-center">
+          <span class="text-slate-400 text-sm uppercase tracking-widest font-bold">Current Streak</span>
+          <div class="stat-value" id="staff-streak-stat">0</div>
         </div>
-        <div class="stat-card glass">
-          <span class="text-slate-400 text-sm uppercase tracking-widest font-bold">Efficiency</span>
-          <div class="stat-value">94%</div>
-          <span class="text-emerald-400 text-xs font-bold">Top 10%</span>
+        <div class="stat-card glass text-center">
+          <span class="text-slate-400 text-sm uppercase tracking-widest font-bold">Attendance Rate</span>
+          <div class="stat-value" id="staff-attendance-rate-stat">0%</div>
+          <span class="text-emerald-400 text-xs font-bold" id="staff-attendance-detail">Excellent</span>
         </div>
       </div>
 
@@ -213,7 +211,14 @@
       <section class="glass p-8">
         <div class="flex justify-between items-center mb-8">
           <h2 class="text-xl font-bold">My Active Tasks</h2>
-          <button class="text-cyan-400 font-bold hover:underline">View History</button>
+          <div class="flex items-center gap-4">
+            <select id="task-status-filter" class="glass bg-transparent border-none text-xs font-bold text-slate-400 focus:outline-none cursor-pointer">
+              <option value="all">All Tasks</option>
+              <option value="pending" selected>Pending</option>
+              <option value="in-progress">In Progress</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
         </div>
         <div class="overflow-x-auto">
           <table class="data-table">
@@ -226,41 +231,22 @@
                 <th>Action</th>
               </tr>
             </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <div class="font-bold">Landing Page UI</div>
-                  <div class="text-xs text-slate-400">Design Phase</div>
-                </td>
-                <td>TechCorp Website</td>
-                <td>Today, 5:00 PM</td>
-                <td><span class="status-badge status-pending">In Progress</span></td>
-                <td><button class="btn-primary py-1 px-3 text-xs">Complete</button></td>
-              </tr>
-              <tr>
-                <td>
-                  <div class="font-bold">Logo Iterations</div>
-                  <div class="text-xs text-slate-400">Branding</div>
-                </td>
-                <td>Creative Net</td>
-                <td>Tomorrow</td>
-                <td><span class="status-badge status-pending">Pending</span></td>
-                <td><button class="btn-primary py-1 px-3 text-xs">Start</button></td>
-              </tr>
-              <tr>
-                <td>
-                  <div class="font-bold">Video Color Grading</div>
-                  <div class="text-xs text-slate-400">Post-Production</div>
-                </td>
-                <td>Startup Promo</td>
-                <td>Oct 15, 2026</td>
-                <td><span class="status-badge status-completed">Done</span></td>
-                <td><button class="text-slate-400 hover:text-white"><i class="fas fa-check-circle"></i></button></td>
-              </tr>
+            <tbody id="my-tasks-table-body">
+              <tr><td colspan="5" class="text-center py-8 text-slate-500">Loading your tasks...</td></tr>
             </tbody>
           </table>
         </div>
       </section>
+
+      <!-- Task Detail Modal -->
+      <div id="task-detail-modal" class="modal-overlay">
+        <div class="modal-content glass max-w-lg w-full">
+          <span id="task-detail-close" class="modal-close"><i class="fas fa-times"></i></span>
+          <div id="task-detail-content">
+            <!-- Content populated by JS -->
+          </div>
+        </div>
+      </div>
     </main>
   </div>
 
