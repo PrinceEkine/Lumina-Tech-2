@@ -1049,16 +1049,20 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div class="glass p-8">
             <h3 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fas fa-user-cog text-cyan-400"></i> Profile Settings</h3>
-            <form class="flex flex-col gap-4">
+            <form id="profile-settings-form" class="flex flex-col gap-4">
               <div class="form-group">
                 <label>Full Name</label>
                 <input type="text" id="settings-name" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2">
               </div>
               <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="settings-username" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2">
+              </div>
+              <div class="form-group">
                 <label>Email Address</label>
                 <input type="email" id="settings-email" readonly class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 opacity-60">
               </div>
-              <button type="button" class="btn-primary mt-2" onclick="showToast('Profile update feature coming soon!', 'info')">Update Profile</button>
+              <button type="submit" class="btn-primary mt-2">Update Profile</button>
             </form>
           </div>
           <div class="glass p-8">
@@ -1069,8 +1073,8 @@
                   <p class="font-bold">Email Notifications</p>
                   <p class="text-xs text-slate-400">Receive email for new bookings</p>
                 </div>
-                <div class="w-12 h-6 bg-cyan-500 rounded-full relative cursor-pointer">
-                  <div class="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div>
+                <div id="toggle-email-notif" class="w-12 h-6 bg-cyan-500 rounded-full relative cursor-pointer transition-colors">
+                  <div class="toggle-dot absolute right-1 top-1 w-4 h-4 bg-white rounded-full transition-all"></div>
                 </div>
               </div>
               <div class="flex justify-between items-center">
@@ -1078,11 +1082,11 @@
                   <p class="font-bold">System Alerts</p>
                   <p class="text-xs text-slate-400">Show desktop notifications</p>
                 </div>
-                <div class="w-12 h-6 bg-slate-700 rounded-full relative cursor-pointer">
-                  <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full"></div>
+                <div id="toggle-system-notif" class="w-12 h-6 bg-slate-700 rounded-full relative cursor-pointer transition-colors">
+                  <div class="toggle-dot absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-all"></div>
                 </div>
               </div>
-              <button type="button" class="glass py-2 rounded-lg hover:text-cyan-400 transition-colors">Save Preferences</button>
+              <button id="save-notif-settings" type="button" class="glass py-2 rounded-lg hover:text-cyan-400 transition-colors">Save Preferences</button>
             </div>
           </div>
           <div class="glass p-8">

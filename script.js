@@ -148,6 +148,7 @@ try {
         // Determine Role
         let userRole = 'Staff';
         let userName = user.user_metadata?.full_name || user.email.split('@')[0];
+        let userUsername = user.user_metadata?.username || user.email.split('@')[0];
 
         if (isUserAdmin) {
           userRole = 'Admin';
@@ -171,6 +172,7 @@ try {
             
             userRole = staffData.role;
             userName = staffData.name;
+            userUsername = staffData.username || user.user_metadata?.username || user.email.split('@')[0];
             document.body.classList.add('is-staff');
             document.body.classList.remove('is-admin');
           } catch (err) {
@@ -197,8 +199,10 @@ try {
         if (welcomeName) welcomeName.innerText = userName;
 
         const settingsName = document.getElementById('settings-name');
+        const settingsUsername = document.getElementById('settings-username');
         const settingsEmail = document.getElementById('settings-email');
         if (settingsName) settingsName.value = userName;
+        if (settingsUsername) settingsUsername.value = userUsername;
         if (settingsEmail) settingsEmail.value = user.email;
 
         // Initial Data Fetch
@@ -2107,6 +2111,110 @@ if (revenueSettingsForm) {
     showToast('Revenue settings saved!', 'success');
     fetchDashboardStats();
   });
+}
+
+const profileSettingsForm = document.getElementById('profile-settings-form');
+if (profileSettingsForm) {
+  profileSettingsForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const submitBtn = profileSettingsForm.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerText;
+    
+    const newName = document.getElementById('settings-name').value;
+    const newUsername = document.getElementById('settings-username').value;
+    
+    setLoading(submitBtn, true);
+    
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      
+      // 1. Update Auth metadata
+      const { error: authError } = await supabase.auth.updateUser({
+        data: { 
+          full_name: newName,
+          username: newUsername
+        }
+      });
+      
+      if (authError) throw authError;
+      
+      // 2. Update staff table
+      const { error: staffError } = await supabase
+        .from('staff')
+        .update({ 
+          name: newName,
+          username: newUsername
+        })
+        .eq('email', user.email);
+        
+      if (staffError) throw staffError;
+      
+      showToast('Profile updated successfully!', 'success');
+      
+      // Refresh UI elements
+      const welcomeName = document.getElementById('welcome-name');
+      const headerName = document.getElementById('user-name-header');
+      const sidebarName = document.getElementById('user-name-sidebar');
+      
+      if (welcomeName) welcomeName.innerText = newName;
+      if (headerName) headerName.innerText = newName;
+      if (sidebarName) sidebarName.innerText = newName;
+      
+      // Update browser tab if looking at a user's page (might not be needed)
+    } catch (err) {
+      console.error("Profile update failed:", err);
+      showToast(`Error: ${err.message}`, 'error');
+    } finally {
+      setLoading(submitBtn, false, originalText);
+    }
+  });
+}
+
+// Notification Settings Logic
+const toggleEmailNotif = document.getElementById('toggle-email-notif');
+const toggleSystemNotif = document.getElementById('toggle-system-notif');
+const saveNotifBtn = document.getElementById('save-notif-settings');
+
+if (toggleEmailNotif && toggleSystemNotif && saveNotifBtn) {
+  // Load saved preferences
+  const prefs = JSON.parse(localStorage.getItem('notificationPrefs') || '{"email": true, "system": false}');
+  updateToggleUI(toggleEmailNotif, prefs.email);
+  updateToggleUI(toggleSystemNotif, prefs.system);
+
+  toggleEmailNotif.addEventListener('click', () => {
+    const currentState = toggleEmailNotif.classList.contains('bg-cyan-500');
+    updateToggleUI(toggleEmailNotif, !currentState);
+  });
+
+  toggleSystemNotif.addEventListener('click', () => {
+    const currentState = toggleSystemNotif.classList.contains('bg-cyan-500');
+    updateToggleUI(toggleSystemNotif, !currentState);
+  });
+
+  saveNotifBtn.addEventListener('click', () => {
+    const prefs = {
+      email: toggleEmailNotif.classList.contains('bg-cyan-500'),
+      system: toggleSystemNotif.classList.contains('bg-cyan-500')
+    };
+    localStorage.setItem('notificationPrefs', JSON.stringify(prefs));
+    showToast('Notification preferences saved!', 'success');
+  });
+}
+
+function updateToggleUI(toggleEl, isActive) {
+  const dot = toggleEl.querySelector('.toggle-dot');
+  if (isActive) {
+    toggleEl.classList.remove('bg-slate-700');
+    toggleEl.classList.add('bg-cyan-500');
+    dot.classList.remove('left-1');
+    dot.classList.add('right-1');
+  } else {
+    toggleEl.classList.remove('bg-cyan-500');
+    toggleEl.classList.add('bg-slate-700');
+    dot.classList.remove('right-1');
+    dot.classList.add('left-1');
+  }
 }
 
 window.updateStatus = async (id, newStatus) => {
