@@ -58,19 +58,17 @@ export const logout = async () => {
     document.body.classList.remove('is-logged-in');
     document.body.classList.remove('is-admin');
     
-    // Start sign out in background
-    const signOutPromise = supabase.auth.signOut();
+    // Wait for sign out to complete
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
     
-    console.log("Sign out initiated, redirecting...");
+    console.log("Sign out successful, redirecting...");
     
-    // Redirect immediately
+    // Redirect after successful sign out
     window.location.replace('/'); 
-    
-    // Wait for sign out to complete in background if possible, 
-    // but we've already redirected so this might not finish in this window context
-    await signOutPromise;
   } catch (error) {
     console.error("Error signing out:", error);
+    // Force redirect anyway as a fallback
     window.location.replace('/');
   }
 };

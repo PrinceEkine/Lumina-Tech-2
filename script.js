@@ -145,6 +145,21 @@ try {
       // Show/hide currency selector based on login status
       if (user) {
         document.body.classList.add('is-logged-in');
+        
+        // Update home page buttons if logged in
+        const homeStaffBtn = document.getElementById('staff-login-btn');
+        const headerLogoutBtn = document.getElementById('header-logout-btn');
+        if (isHome) {
+          if (homeStaffBtn) {
+            homeStaffBtn.innerText = 'Dashboard';
+            homeStaffBtn.onclick = () => window.location.href = '/admin.html';
+          }
+          if (headerLogoutBtn) {
+            headerLogoutBtn.classList.remove('hidden');
+            headerLogoutBtn.addEventListener('click', authLogout);
+          }
+        }
+
         if (isUserAdmin) {
           localStorage.setItem('isAdminSession', 'true');
         } else {
@@ -340,8 +355,6 @@ forms.forEach(form => {
         });
 
         if (error) {
-          // If it's an admin email and password login fails, maybe they should use Google?
-          // But for now, let's just show the error.
           throw error;
         }
 
@@ -820,7 +833,8 @@ async function fetchChatContacts() {
 async function fetchChatMessages() {
   if (!chatMessages) return;
   
-  const currentMyId = myId || (await supabase.auth.getUser()).data.user?.id || 'admin-session';
+  const userResponse = await supabase.auth.getUser();
+  const currentMyId = userResponse.data.user?.id || 'admin-session';
 
   try {
     let query = supabase.from('messages').select('*');
@@ -916,12 +930,29 @@ if (teamChatForm) {
         sender_id: senderId,
         sender_name: senderName,
         content: content,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        status: 'sent'
       };
 
       if (activeRecipient !== 'global') {
         messageData.recipient_id = activeRecipient;
       }
+
+      // Optimistic Update
+      const isMe = true;
+      chatMessages.innerHTML = chatMessages.innerHTML.replace('<div class="text-center py-12 text-slate-500">Select a contact to start chatting</div>', '');
+      chatMessages.innerHTML = chatMessages.innerHTML.replace(`<div class="text-center py-12 text-slate-500">No messages with ${activeChatName.innerText} yet.</div>`, '');
+
+      const tempMsgDiv = document.createElement('div');
+      tempMsgDiv.className = 'flex flex-col items-end';
+      tempMsgDiv.innerHTML = `
+        <div class="max-w-[80%] p-3 rounded-xl bg-cyan-500 text-black relative">
+          <p class="text-sm">${content}</p>
+        </div>
+        <span class="text-[8px] mt-1 text-slate-500 italic">Sending...</span>
+      `;
+      chatMessages.appendChild(tempMsgDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
 
       const { error } = await supabase
         .from('messages')
@@ -932,6 +963,7 @@ if (teamChatForm) {
       fetchChatMessages();
     } catch (err) {
       console.error("Error sending message:", err);
+      showToast("Failed to send message", "error");
     }
   });
 }
@@ -1610,15 +1642,19 @@ function setupRealtimeSubscriptions() {
 
       // Handle New Messages
       if (payload.eventType === 'INSERT') {
+        const msg = payload.new;
+        const userRes = await supabase.auth.getUser();
+        const meId = userRes.data.user?.id || 'admin-session';
+
         const isGlobal = activeRecipient === 'global' && !msg.recipient_id;
-        const isPrivate = (activeRecipient === msg.sender_id && msg.recipient_id === currentMyId) || 
-                          (activeRecipient === msg.recipient_id && msg.sender_id === currentMyId);
+        const isPrivate = (activeRecipient === msg.sender_id && msg.recipient_id === meId) || 
+                          (activeRecipient === msg.recipient_id && msg.sender_id === meId);
 
         if (chatView && !chatView.classList.contains('hidden') && (isGlobal || isPrivate)) {
           fetchChatMessages();
         }
         
-        const forMe = msg.recipient_id === currentMyId || (!msg.recipient_id && currentMyId !== msg.sender_id);
+        const forMe = msg.recipient_id === meId || (!msg.recipient_id && meId !== msg.sender_id);
         const notLooking = chatView.classList.contains('hidden') || !isPrivate && !isGlobal;
 
         if (forMe && notLooking) {

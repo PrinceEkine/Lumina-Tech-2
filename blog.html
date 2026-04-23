@@ -44,6 +44,7 @@
           </li>
           <li>
             <button id="staff-login-btn" class="staff-btn">Staff Login</button>
+            <button id="header-logout-btn" class="staff-btn hidden">Sign Out</button>
           </li>
         </ul>
       </nav>
@@ -57,14 +58,14 @@
       <h2 class="text-2xl font-bold mb-6 text-center">Staff <span class="text-cyan-400">Login</span></h2>
       <form class="login-form">
         <div class="form-group">
-          <label for="username">Username</label>
-          <input type="text" id="username" placeholder="Enter username" required>
+          <label for="username">Username or Email</label>
+          <input type="text" id="username" placeholder="admin or your email" required>
         </div>
         <div class="form-group">
           <label for="password">Password</label>
           <input type="password" id="password" placeholder="Enter password" required>
         </div>
-        <button type="submit" class="btn-primary w-full mt-4">Login</button>
+        <button type="submit" id="login-submit-btn" class="btn-primary w-full mt-4">Login</button>
       </form>
     </div>
   </div>
