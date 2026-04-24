@@ -609,6 +609,7 @@ body.light-mode .btn-secondary {
 }
 
 body.is-admin .admin-only,
+body.is-hr .admin-only,
 body.is-admin .staff-only,
 body.is-staff .staff-only {
   display: block;

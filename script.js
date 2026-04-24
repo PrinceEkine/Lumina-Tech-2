@@ -1,3 +1,52 @@
+// --- DATABASE SETUP (SQL for Supabase Editor) ---
+/*
+  CREATE TABLE staff (
+    id UUID PRIMARY KEY,
+    name TEXT,
+    email TEXT UNIQUE,
+    username TEXT,
+    role TEXT,
+    phone_number TEXT,
+    status TEXT DEFAULT 'Active',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+
+  CREATE TABLE attendance (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    staff_id UUID REFERENCES auth.users(id),
+    staff_name TEXT,
+    clock_in TIMESTAMP WITH TIME ZONE,
+    clock_out TIMESTAMP WITH TIME ZONE,
+    date DATE,
+    status TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+
+  CREATE TABLE tasks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT,
+    assignee_id UUID REFERENCES staff(id),
+    category TEXT,
+    priority TEXT,
+    due_date DATE,
+    description TEXT,
+    reminders BOOLEAN DEFAULT false,
+    status TEXT DEFAULT 'pending',
+    completion_date TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+
+  CREATE TABLE messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sender_id UUID REFERENCES auth.users(id),
+    sender_name TEXT,
+    recipient_id UUID,
+    content TEXT,
+    status TEXT DEFAULT 'sent',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+*/
+
 import { supabase } from './supabase';
 import { isAdmin, logout as authLogout } from './auth';
 import { setupTheme, CurrencyManager, setupCurrencySelectors } from './ui';
@@ -184,7 +233,7 @@ try {
         if (isUserAdmin) {
           userRole = 'Admin';
           document.body.classList.add('is-admin');
-          document.body.classList.remove('is-staff');
+          document.body.classList.remove('is-staff', 'is-hr');
         } else {
           // Check staff table for role
           try {
@@ -204,7 +253,13 @@ try {
             userRole = staffData.role;
             userName = staffData.name;
             userUsername = staffData.username || user.user_metadata?.username || user.email.split('@')[0];
+            
             document.body.classList.add('is-staff');
+            if (userRole === 'HR') {
+              document.body.classList.add('is-hr');
+            } else {
+              document.body.classList.remove('is-hr');
+            }
             document.body.classList.remove('is-admin');
           } catch (err) {
             console.error("Role check failed:", err);
@@ -225,6 +280,9 @@ try {
         if (sidebarAvatar) sidebarAvatar.innerText = userName.charAt(0).toUpperCase();
         if (headerName) headerName.innerText = userName;
         if (headerAvatar) headerAvatar.innerText = userName.charAt(0).toUpperCase();
+        
+        const headerUsername = document.getElementById('user-username-header');
+        if (headerUsername) headerUsername.innerText = `@${userUsername}`;
 
         const welcomeName = document.getElementById('welcome-name');
         if (welcomeName) welcomeName.innerText = userName;
@@ -237,7 +295,7 @@ try {
         if (settingsEmail) settingsEmail.value = user.email;
 
         // Initial Data Fetch
-      if (userRole === 'Admin') {
+      if (userRole === 'Admin' || userRole === 'HR') {
         fetchDashboardStats();
         fetchBookings();
         fetchStaff();
@@ -365,7 +423,7 @@ forms.forEach(form => {
         try {
           const { data: existingStaff } = await supabase
             .from('staff')
-            .select('id')
+            .select('*')
             .eq('email', user.email)
             .maybeSingle();
 
@@ -374,6 +432,7 @@ forms.forEach(form => {
               id: user.id,
               name: user.user_metadata?.full_name || user.email.split('@')[0],
               email: user.email,
+              username: user.email.split('@')[0],
               role: isUserAdmin ? 'Admin' : 'Staff',
               status: 'Active',
               created_at: new Date().toISOString()
@@ -1960,9 +2019,39 @@ async function fetchStaffDashboardStats() {
     if (attendanceError) throw attendanceError;
 
     const completedTasks = tasks ? tasks.filter(t => t.status === 'completed').length : 0;
+    const pendingTasksCount = tasks ? tasks.filter(t => t.status !== 'completed').length : 0;
     const upcomingTasks = tasks ? tasks.filter(t => t.status !== 'completed').slice(0, 5) : [];
     
-    // Populate upcoming tasks table
+    if (completedTasksEl) completedTasksEl.innerText = completedTasks;
+    const pendingTasksCountEl = document.getElementById('staff-pending-tasks-count');
+    if (pendingTasksCountEl) pendingTasksCountEl.innerText = `${pendingTasksCount} pending`;
+
+    // Populate today's clock status on dashboard
+    const today = new Date().toISOString().split('T')[0];
+    const todayRecord = attendance ? attendance.find(a => a.date === today && !a.clock_out) : null;
+    const dashInBtn = document.getElementById('dash-clock-in-btn');
+    const dashOutBtn = document.getElementById('dash-clock-out-btn');
+    const dashStatus = document.getElementById('dash-clock-status');
+
+    if (dashInBtn && dashOutBtn && dashStatus) {
+      if (todayRecord) {
+        dashInBtn.classList.add('hidden');
+        dashOutBtn.classList.remove('hidden');
+        dashStatus.innerText = `Clocked in at ${new Date(todayRecord.clock_in).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`;
+      } else {
+        const completedToday = attendance ? attendance.find(a => a.date === today && a.clock_out) : null;
+        if (completedToday) {
+          dashInBtn.classList.add('hidden');
+          dashOutBtn.classList.add('hidden');
+          dashStatus.innerText = 'Attendance completed for today';
+          dashStatus.classList.replace('text-slate-500', 'text-emerald-500');
+        } else {
+          dashInBtn.classList.remove('hidden');
+          dashOutBtn.classList.add('hidden');
+          dashStatus.innerText = 'Not clocked in today';
+        }
+      }
+    }
     if (staffDashboardTasksBody) {
       staffDashboardTasksBody.innerHTML = '';
       if (upcomingTasks.length === 0) {
@@ -2704,9 +2793,10 @@ async function fetchAttendance() {
       });
     }
 
-      // Admin View: All Staff Attendance
+      // Admin/HR View: All Staff Attendance
       const isAdmin = localStorage.getItem('isAdminSession') === 'true';
-      if (isAdmin && adminAttendanceBody) {
+      const isHR = userRole === 'HR';
+      if ((isAdmin || isHR) && adminAttendanceBody) {
         const { data: allAttendance, error: allAttendanceError } = await supabase
           .from('attendance')
           .select('*')
@@ -2744,7 +2834,14 @@ async function fetchAttendance() {
 }
 
 if (clockInBtn) {
-  clockInBtn.addEventListener('click', async () => {
+  clockInBtn.addEventListener('click', async () => handleClockIn());
+}
+const dashClockInBtn = document.getElementById('dash-clock-in-btn');
+if (dashClockInBtn) {
+  dashClockInBtn.addEventListener('click', async () => handleClockIn());
+}
+
+async function handleClockIn() {
     try {
       const userResponse = await supabase.auth.getUser();
       const user = userResponse.data.user;
@@ -2756,9 +2853,22 @@ if (clockInBtn) {
       const staffName = user.user_metadata?.full_name || userName || user.email.split('@')[0];
       const today = new Date().toISOString().split('T')[0];
       
+      // Check if already clocked in for today
+      const { data: existing } = await supabase
+        .from('attendance')
+        .select('id')
+        .eq('staff_id', user.id)
+        .eq('date', today)
+        .maybeSingle();
+
+      if (existing) {
+        showToast('You have already clocked in for today', 'info');
+        return;
+      }
+
       // Late Check: After 9:00 AM
       const now = new Date();
-      const isLate = now.getHours() >= 9 && now.getMinutes() > 0;
+      const isLate = now.getHours() >= 9 && (now.getHours() > 9 || now.getMinutes() > 0);
 
       const { error } = await supabase
         .from('attendance')
@@ -2774,11 +2884,11 @@ if (clockInBtn) {
 
       showToast(`Clocked in successfully! ${isLate ? '(Marked as Late)' : ''}`, isLate ? 'warning' : 'success');
       fetchAttendance();
+      fetchStaffDashboardStats();
     } catch (err) {
       console.error("Error clocking in:", err);
-      showToast('Failed to clock in', 'error');
+      showToast('Failed to clock in: ' + err.message, 'error');
     }
-  });
 }
 
 window.deleteAttendanceRecord = async (id) => {
@@ -2800,7 +2910,14 @@ window.deleteAttendanceRecord = async (id) => {
 };
 
 if (clockOutBtn) {
-  clockOutBtn.addEventListener('click', async () => {
+  clockOutBtn.addEventListener('click', async () => handleClockOut());
+}
+const dashClockOutBtn = document.getElementById('dash-clock-out-btn');
+if (dashClockOutBtn) {
+  dashClockOutBtn.addEventListener('click', async () => handleClockOut());
+}
+
+async function handleClockOut() {
     try {
       const userResponse = await supabase.auth.getUser();
       const user = userResponse.data.user;
@@ -2808,25 +2925,45 @@ if (clockOutBtn) {
 
       const today = new Date().toISOString().split('T')[0];
 
+      // Fetch today's record to check duration
+      const { data: record, error: fetchError } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('staff_id', user.id)
+        .eq('date', today)
+        .is('clock_out', null)
+        .maybeSingle();
+
+      if (fetchError || !record) throw new Error("Clock-in record not found. Please clock in first.");
+
+      const clockInTime = new Date(record.clock_in);
+      const now = new Date();
+      const diffMs = now - clockInTime;
+      const diffHours = diffMs / (1000 * 60 * 60);
+
+      if (diffHours < 4) {
+        const remaining = (4 - diffHours).toFixed(1);
+        showToast(`Clock-out failed. Minimum 4 hours duration required. Please wait ${remaining}h more.`, 'error');
+        return;
+      }
+
       const { error } = await supabase
         .from('attendance')
         .update({ 
-          clock_out: new Date().toISOString(),
+          clock_out: now.toISOString(),
           status: 'Completed'
         })
-        .eq('staff_id', user.id)
-        .eq('date', today)
-        .is('clock_out', null);
+        .eq('id', record.id);
 
       if (error) throw error;
 
-      showToast('Clocked out successfully!', 'success');
+      showToast('Clocked out successfully! Great work today.', 'success');
       fetchAttendance();
+      fetchStaffDashboardStats();
     } catch (err) {
       console.error("Error clocking out:", err);
-      showToast('Failed to clock out', 'error');
+      showToast(err.message || 'Failed to clock out', 'error');
     }
-  });
 }
 
 // Logout Logic
