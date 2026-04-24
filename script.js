@@ -1,12 +1,12 @@
 // --- DATABASE SETUP (SQL for Supabase Editor) ---
 /*
-  -- 1. Staff Table
+  -- 1. Staff Table (Stores additional profile info)
   CREATE TABLE staff (
-    id UUID PRIMARY KEY,
-    name TEXT,
-    email TEXT UNIQUE,
-    username TEXT,
-    role TEXT,
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    username TEXT UNIQUE,
+    role TEXT DEFAULT 'Staff', -- 'Admin', 'HR', 'Staff'
     phone_number TEXT,
     status TEXT DEFAULT 'Active',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -15,63 +15,114 @@
   -- 2. Attendance Table
   CREATE TABLE attendance (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    staff_id UUID REFERENCES auth.users(id),
+    staff_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     staff_name TEXT,
-    clock_in TIMESTAMP WITH TIME ZONE,
+    date DATE DEFAULT CURRENT_DATE,
+    clock_in TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     clock_out TIMESTAMP WITH TIME ZONE,
-    date DATE,
-    status TEXT,
+    status TEXT DEFAULT 'On Time',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
   );
 
   -- 3. Tasks Table
   CREATE TABLE tasks (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    title TEXT,
-    assignee_id UUID, -- References staff.id or auth.users.id
+    title TEXT NOT NULL,
+    assignee_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     category TEXT,
     priority TEXT,
     due_date DATE,
     description TEXT,
     reminders BOOLEAN DEFAULT false,
-    status TEXT DEFAULT 'pending',
-    completion_date TIMESTAMP WITH TIME ZONE,
+    status TEXT DEFAULT 'pending', -- 'pending', 'in-progress', 'completed'
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
   );
 
-  -- 4. Messages Table
+  -- 4. Messages Table (Team Chat)
   CREATE TABLE messages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    sender_id UUID,
+    sender_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     sender_name TEXT,
-    recipient_id UUID,
-    content TEXT,
-    status TEXT DEFAULT 'sent',
+    recipient_id UUID REFERENCES auth.users(id) ON DELETE CASCADE, -- NULL for Global Chat
+    content TEXT NOT NULL,
+    status TEXT DEFAULT 'sent', -- 'sent', 'read'
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
   );
 
   -- 5. Leave Requests Table
   CREATE TABLE leave_requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    staff_id UUID REFERENCES auth.users(id),
+    staff_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     staff_name TEXT,
     type TEXT,
     start_date DATE,
     end_date DATE,
     reason TEXT,
-    status TEXT DEFAULT 'Pending',
+    status TEXT DEFAULT 'Pending', -- 'Pending', 'Approved', 'Rejected'
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
   );
 
   -- 6. Announcements Table
   CREATE TABLE announcements (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    title TEXT,
-    content TEXT,
-    author_id UUID,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    author_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     author_name TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
   );
+
+  -- 7. Media Table
+  CREATE TABLE media (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT,
+    url TEXT NOT NULL,
+    type TEXT,
+    size BIGINT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+
+  -- 8. Notifications Table
+  CREATE TABLE notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    title TEXT,
+    message TEXT,
+    type TEXT,
+    read BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+
+  -- 9. Blogs Table
+  CREATE TABLE blogs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    slug TEXT UNIQUE NOT NULL,
+    content TEXT,
+    excerpt TEXT,
+    image_url TEXT,
+    author_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    author_name TEXT,
+    category TEXT,
+    status TEXT DEFAULT 'draft',
+    published_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+
+  -- 10. Inquiries Table (From Contact Form)
+  CREATE TABLE inquiries (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT,
+    email TEXT,
+    subject TEXT,
+    message TEXT,
+    status TEXT DEFAULT 'new',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+
+  -- IMPORTANT: Enable RLS for all tables and add "Allow All" policies for testing, 
+  -- then harden them later. For now, if tasks/chats aren't saving, 
+  -- go to RLS settings in Supabase and ensure users have INSERT/SELECT permissions.
 */
 
 import { supabase } from './supabase';
@@ -897,7 +948,14 @@ async function fetchChatMessages() {
   if (!chatMessages) return;
   
   const userResponse = await supabase.auth.getUser();
-  const currentMyId = userResponse.data.user?.id || 'admin-session';
+  const user = userResponse.data.user;
+  
+  if (!user) {
+    console.error("No active session found for chat.");
+    return;
+  }
+  
+  const currentMyId = user.id;
 
   try {
     let query = supabase.from('messages').select('*');
@@ -905,6 +963,12 @@ async function fetchChatMessages() {
     if (activeRecipient === 'global') {
       query = query.is('recipient_id', null);
     } else {
+      // Use or filter only if activeRecipient is a valid UUID
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(activeRecipient)) {
+        chatMessages.innerHTML = `<div class="text-center py-12 text-slate-500">Invalid contact ID.</div>`;
+        return;
+      }
       query = query.or(`and(sender_id.eq.${currentMyId},recipient_id.eq.${activeRecipient}),and(sender_id.eq.${activeRecipient},recipient_id.eq.${currentMyId})`);
     }
 
@@ -983,12 +1047,15 @@ if (teamChatForm) {
     const content = chatInput.value.trim();
     if (!content) return;
 
-    const user = (await supabase.auth.getUser()).data.user;
-    const isAdmin = localStorage.getItem('isAdminSession') === 'true';
-    const senderName = isAdmin ? 'Admin' : (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Staff');
-    const senderId = user?.id || 'admin-session';
-
     try {
+      const userRes = await supabase.auth.getUser();
+      const user = userRes.data.user;
+      if (!user) throw new Error("Log in to send messages");
+      
+      const isAdmin = localStorage.getItem('isAdminSession') === 'true';
+      const senderName = isAdmin ? 'Admin' : (user.user_metadata?.full_name || user.email.split('@')[0] || 'Staff');
+      const senderId = user.id;
+
       const messageData = {
         sender_id: senderId,
         sender_name: senderName,
@@ -1515,7 +1582,7 @@ if (leaveForm) {
       if (error) throw error;
 
       showToast('Leave request submitted successfully!', 'success');
-      if (leaveModal) leaveModal.classList.remove('show');
+      if (leaveModal) leaveModal.classList.add('hidden');
       leaveForm.reset();
       fetchLeaveRequests();
     } catch (err) {
@@ -1691,8 +1758,11 @@ function setupRealtimeSubscriptions() {
   // Sync Chat
   chatChannel = supabase.channel('public:messages')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, async payload => {
-      const user = (await supabase.auth.getUser()).data.user;
-      const currentMyId = user?.id || 'admin-session';
+      const userRes = await supabase.auth.getUser();
+      const user = userRes.data.user;
+      if (!user) return;
+      
+      const currentMyId = user.id;
       const msg = payload.new;
 
       // Handle Read Receipt Updates
@@ -1706,8 +1776,7 @@ function setupRealtimeSubscriptions() {
       // Handle New Messages
       if (payload.eventType === 'INSERT') {
         const msg = payload.new;
-        const userRes = await supabase.auth.getUser();
-        const meId = userRes.data.user?.id || 'admin-session';
+        const meId = user.id;
 
         const isGlobal = activeRecipient === 'global' && !msg.recipient_id;
         const isPrivate = (activeRecipient === msg.sender_id && msg.recipient_id === meId) || 

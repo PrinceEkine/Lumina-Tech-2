@@ -1,6 +1,7 @@
 import express from "express";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
@@ -61,18 +62,6 @@ function isRateLimited(ip: string, map: Map<string, number[]>, limit: number): b
   return false;
 }
 
-// API Route: Send Email
-app.post("/api/send-email", async (req, res) => {
-  const ip = req.ip || req.headers['x-forwarded-for']?.toString() || 'unknown';
-  
-  if (isRateLimited(ip, emailRateLimit, MAX_EMAILS_PER_WINDOW)) {
-    return res.status(429).json({ error: "Too many email requests. Please try again in an hour." });
-  }
-  // ...
-});
-
-import { createClient } from '@supabase/supabase-js';
-
 // API Route: Create Staff Account (Admin only)
 app.post("/api/create-staff", async (req, res) => {
   const ip = req.ip || req.headers['x-forwarded-for']?.toString() || 'unknown';
@@ -128,6 +117,14 @@ app.post("/api/create-staff", async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+
+// API Route: Send Email
+app.post("/api/send-email", async (req, res) => {
+  const ip = req.ip || req.headers['x-forwarded-for']?.toString() || 'unknown';
+  
+  if (isRateLimited(ip, emailRateLimit, MAX_EMAILS_PER_WINDOW)) {
+    return res.status(429).json({ error: "Too many email requests. Please try again in an hour." });
+  }
 
   const { to, subject, message } = req.body;
 
