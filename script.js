@@ -1,5 +1,6 @@
 // --- DATABASE SETUP (SQL for Supabase Editor) ---
 /*
+  -- 1. Staff Table
   CREATE TABLE staff (
     id UUID PRIMARY KEY,
     name TEXT,
@@ -11,6 +12,7 @@
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
   );
 
+  -- 2. Attendance Table
   CREATE TABLE attendance (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     staff_id UUID REFERENCES auth.users(id),
@@ -22,10 +24,11 @@
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
   );
 
+  -- 3. Tasks Table
   CREATE TABLE tasks (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     title TEXT,
-    assignee_id UUID REFERENCES staff(id),
+    assignee_id UUID, -- References staff.id or auth.users.id
     category TEXT,
     priority TEXT,
     due_date DATE,
@@ -36,13 +39,37 @@
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
   );
 
+  -- 4. Messages Table
   CREATE TABLE messages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    sender_id UUID REFERENCES auth.users(id),
+    sender_id UUID,
     sender_name TEXT,
     recipient_id UUID,
     content TEXT,
     status TEXT DEFAULT 'sent',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+
+  -- 5. Leave Requests Table
+  CREATE TABLE leave_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    staff_id UUID REFERENCES auth.users(id),
+    staff_name TEXT,
+    type TEXT,
+    start_date DATE,
+    end_date DATE,
+    reason TEXT,
+    status TEXT DEFAULT 'Pending',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+
+  -- 6. Announcements Table
+  CREATE TABLE announcements (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT,
+    content TEXT,
+    author_id UUID,
+    author_name TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
   );
 */
@@ -550,39 +577,16 @@ forms.forEach(form => {
         const name = document.getElementById('staff-name').value;
         const role = document.getElementById('staff-role').value;
 
-        // 1. Create the user in Supabase Auth
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: name,
-              role: role,
-              phone: phone
-            }
-          }
+        const response = await fetch('/api/create-staff', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, name, role, phone })
         });
 
-        if (authError) throw authError;
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Failed to create staff');
 
-        // 2. Save to our staff table for management
-        const staffData = {
-          id: authData.user?.id, // Link to auth user
-          name: name,
-          email: email,
-          phone_number: phone,
-          role: role,
-          status: 'Active',
-          created_at: new Date().toISOString()
-        };
-        
-        const { error: dbError } = await supabase
-          .from('staff')
-          .insert([staffData]);
-
-        if (dbError) throw dbError;
-        
-        showToast('Staff account created!', 'success');
+        showToast(`Staff account for ${name} created successfully!`, 'success');
         form.reset();
         setLoading(submitBtn, false, originalText);
         if (staffModal) staffModal.classList.remove('show');
@@ -1022,7 +1026,7 @@ if (teamChatForm) {
       fetchChatMessages();
     } catch (err) {
       console.error("Error sending message:", err);
-      showToast("Failed to send message", "error");
+      showToast("Failed to send message. Please ensure the 'messages' table exists.", "error");
     }
   });
 }
@@ -1510,13 +1514,13 @@ if (leaveForm) {
 
       if (error) throw error;
 
-      showToast('Leave request submitted!', 'success');
-      leaveModal.classList.add('hidden');
+      showToast('Leave request submitted successfully!', 'success');
+      if (leaveModal) leaveModal.classList.remove('show');
       leaveForm.reset();
       fetchLeaveRequests();
     } catch (err) {
       console.error("Error submitting leave:", err);
-      showToast('Failed to submit request', 'error');
+      showToast('Failed to submit leave request. Ensure the database table exists.', 'error');
     }
   });
 }
@@ -1830,9 +1834,16 @@ if (assignTaskForm) {
     submitBtn.disabled = true;
 
     try {
+      const assigneeId = document.getElementById('task-assignee').value;
+      if (!assigneeId) {
+        showToast('Please select a staff member to assign the task to.', 'warning');
+        setLoading(submitBtn, false, originalText);
+        return;
+      }
+
       const taskData = {
         title: document.getElementById('task-title').value,
-        assignee_id: document.getElementById('task-assignee').value,
+        assignee_id: assigneeId,
         category: document.getElementById('task-category').value,
         priority: document.getElementById('task-priority').value,
         due_date: document.getElementById('task-due-date').value,
@@ -1848,20 +1859,18 @@ if (assignTaskForm) {
 
       if (error) throw error;
 
-      submitBtn.innerText = 'Task Assigned!';
-      submitBtn.style.background = '#10b981';
+      showToast('Task assigned successfully!', 'success');
       assignTaskForm.reset();
-      fetchAdminTasks(); // Refresh the table
-
+      
       setTimeout(() => {
-        submitBtn.innerText = originalText;
-        submitBtn.style.background = '';
-        submitBtn.disabled = false;
+        setLoading(submitBtn, false, originalText);
       }, 2000);
+      
+      fetchAdminTasks(); // Refresh the table
     } catch (error) {
       console.error("Error assigning task:", error);
-      submitBtn.innerText = 'Error!';
-      submitBtn.disabled = false;
+      showToast('Failed to assign task: ' + (error.message || 'Check your database connection'), 'error');
+      setLoading(submitBtn, false, originalText);
     }
   });
 }

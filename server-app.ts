@@ -42,20 +42,22 @@ app.use(express.json());
 
 // 0. Simple In-Memory Rate Limiter
 const emailRateLimit = new Map<string, number[]>();
+const staffRateLimit = new Map<string, number[]>();
 const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
 const MAX_EMAILS_PER_WINDOW = 5;
+const MAX_STAFF_CREATIONS_PER_WINDOW = 10;
 
-function isRateLimited(ip: string): boolean {
+function isRateLimited(ip: string, map: Map<string, number[]>, limit: number): boolean {
   const now = Date.now();
-  const timestamps = emailRateLimit.get(ip) || [];
+  const timestamps = map.get(ip) || [];
   const recentTimestamps = timestamps.filter(t => now - t < RATE_LIMIT_WINDOW);
   
-  if (recentTimestamps.length >= MAX_EMAILS_PER_WINDOW) {
+  if (recentTimestamps.length >= limit) {
     return true;
   }
   
   recentTimestamps.push(now);
-  emailRateLimit.set(ip, recentTimestamps);
+  map.set(ip, recentTimestamps);
   return false;
 }
 
@@ -63,9 +65,69 @@ function isRateLimited(ip: string): boolean {
 app.post("/api/send-email", async (req, res) => {
   const ip = req.ip || req.headers['x-forwarded-for']?.toString() || 'unknown';
   
-  if (isRateLimited(ip)) {
+  if (isRateLimited(ip, emailRateLimit, MAX_EMAILS_PER_WINDOW)) {
     return res.status(429).json({ error: "Too many email requests. Please try again in an hour." });
   }
+  // ...
+});
+
+import { createClient } from '@supabase/supabase-js';
+
+// API Route: Create Staff Account (Admin only)
+app.post("/api/create-staff", async (req, res) => {
+  const ip = req.ip || req.headers['x-forwarded-for']?.toString() || 'unknown';
+  
+  if (isRateLimited(ip, staffRateLimit, MAX_STAFF_CREATIONS_PER_WINDOW)) {
+    return res.status(429).json({ error: "Too many staff creations. Try again later." });
+  }
+
+  const { email, password, name, role, phone } = req.body;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env.VITE_SUPABASE_URL;
+
+  if (!serviceKey || !url) {
+    return res.status(500).json({ error: "Supabase Service Role Key is not configured on the server." });
+  }
+
+  const adminSupabase = createClient(url, serviceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
+
+  try {
+    // 1. Create User in Auth
+    const { data: authData, error: authError } = await adminSupabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: name, role: role, phone: phone }
+    });
+
+    if (authError) throw authError;
+
+    // 2. Create entry in staff table
+    const { error: dbError } = await adminSupabase
+      .from('staff')
+      .insert([{
+        id: authData.user?.id,
+        name,
+        email,
+        username: email.split('@')[0],
+        role,
+        phone_number: phone,
+        status: 'Active'
+      }]);
+
+    if (dbError) throw dbError;
+
+    res.json({ success: true, userId: authData.user?.id });
+  } catch (err: any) {
+    console.error("Staff Creation Error:", err);
+    res.status(400).json({ error: err.message });
+  }
+});
 
   const { to, subject, message } = req.body;
 
