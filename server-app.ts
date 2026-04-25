@@ -1,11 +1,32 @@
 import express from "express";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
-import { createClient } from '@supabase/supabase-js';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 dotenv.config();
 
 const app = express();
+
+// Initialize Admin SDK
+if (!getApps().length) {
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  
+  if (clientEmail && privateKey && projectId) {
+    initializeApp({
+      credential: cert({
+        projectId: projectId,
+        clientEmail: clientEmail,
+        privateKey: privateKey,
+      })
+    });
+  } else {
+    console.warn("FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY or FIREBASE_PROJECT_ID not set. Admin features limited.");
+  }
+}
 
 let smtpTransporter: nodemailer.Transporter | null = null;
 
@@ -71,50 +92,50 @@ app.post("/api/create-staff", async (req, res) => {
   }
 
   const { email, password, name, role, phone } = req.body;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const url = process.env.VITE_SUPABASE_URL;
 
-  if (!serviceKey || !url) {
-    return res.status(500).json({ error: "Supabase Service Role Key is not configured on the server." });
+  if (!getApps().length) {
+    return res.status(500).json({ error: "Firebase Admin is not initialized. Please set FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY." });
   }
 
-  const adminSupabase = createClient(url, serviceKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  });
-
   try {
+    console.log(`[Staff Creation] Starting creation for: ${email}`);
+    
     // 1. Create User in Auth
-    const { data: authData, error: authError } = await adminSupabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: name, role: role, phone: phone }
-    });
+    let userRecord;
+    try {
+      userRecord = await getAuth().createUser({
+        email,
+        password,
+        displayName: name,
+      });
+      console.log(`[Staff Creation] Auth user created: ${userRecord.uid}`);
+    } catch (authErr: any) {
+      console.error("[Staff Creation] Auth error:", authErr);
+      return res.status(400).json({ error: `Auth Error: ${authErr.message}` });
+    }
 
-    if (authError) throw authError;
-
-    // 2. Create entry in staff table
-    const { error: dbError } = await adminSupabase
-      .from('staff')
-      .insert([{
-        id: authData.user?.id,
+    // 2. Create entry in users collection
+    try {
+      const dbId = process.env.FIREBASE_DATABASE_ID || process.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID;
+      const db = getFirestore(undefined, dbId);
+      await db.collection('users').doc(userRecord.uid).set({
         name,
         email,
-        username: email.split('@')[0],
         role,
-        phone_number: phone,
-        status: 'Active'
-      }]);
+        phone_number: phone || '',
+        status: 'Active',
+        created_at: FieldValue.serverTimestamp()
+      });
+      console.log(`[Staff Creation] Firestore entry created for: ${userRecord.uid}`);
+    } catch (fsErr: any) {
+      console.error("[Staff Creation] Firestore error:", fsErr);
+      return res.status(500).json({ error: `Database Error: ${fsErr.message}` });
+    }
 
-    if (dbError) throw dbError;
-
-    res.json({ success: true, userId: authData.user?.id });
+    res.json({ success: true, userId: userRecord.uid });
   } catch (err: any) {
-    console.error("Staff Creation Error:", err);
-    res.status(400).json({ error: err.message });
+    console.error("[Staff Creation] General Error:", err);
+    res.status(500).json({ error: "Internal server error during staff creation." });
   }
 });
 

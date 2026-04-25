@@ -5,7 +5,7 @@ To run this application on your local machine, follow these steps:
 ## 1. Prerequisites
 - [Node.js](https://nodejs.org/) (Version 18 or higher recommended)
 - [npm](https://www.npmjs.com/) (installed with Node.js)
-- A [Supabase](https://supabase.com/) account and project
+- A [Firebase](https://firebase.google.com/) account and project
 
 ## 2. Setup Database
 1. Create a new project on Supabase.
@@ -23,11 +23,8 @@ To run this application on your local machine, follow these steps:
 ## 4. Environment Variables
 1. Create a file named `.env` in the root directory.
 2. Copy the contents from `.env.example` into your new `.env` file.
-3. Replace the placeholder values with your real Supabase credentials:
-   ```env
-   VITE_SUPABASE_URL=https://your-project-id.supabase.co
-   VITE_SUPABASE_ANON_KEY=your-actual-anon-key
-   ```
+3. Replace the placeholder values with your real Firebase credentials from the Firebase Console:
+   (Refer to .env.example for all required variables)
 
 ## 5. Run the Application
 1. Start the development server:
@@ -42,5 +39,5 @@ If you see "Failed to fetch" or "Connection error" in AI Studio, it's because th
 **To fix in AI Studio:**
 1. Click the **Settings (gear icon)** in the top right menu of AI Studio.
 2. Find the **Secrets/Environment Variables** section.
-3. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+3. Add the variables from `.env.example`.
 4. The preview will refresh and the login will work.

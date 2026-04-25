@@ -1,0 +1,137 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL HELPERS ---
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() { 
+      return isSignedIn() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['Admin', 'CEO', 'Ass CEO'];
+    }
+    function isHR() {
+      return isSignedIn() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'HR';
+    }
+    function isStaff() {
+      return isSignedIn() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['Admin', 'HR', 'Staff', 'CEO', 'Ass CEO'];
+    }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 64 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // --- ENTITY VALIDATIONS ---
+    function isValidUser(data) {
+      return data.keys().hasAll(['name', 'email', 'role']) &&
+             data.name is string && data.name.size() <= 100 &&
+             data.email is string && data.email.size() <= 100 &&
+             data.role in ['Admin', 'HR', 'Staff', 'Client', 'CEO', 'Ass CEO'];
+    }
+
+    function isValidAttendance(data) {
+      return data.keys().hasAll(['staff_id', 'date', 'clock_in', 'status']) &&
+             data.staff_id is string && isValidId(data.staff_id) &&
+             data.date is string && data.date.size() <= 10 &&
+             data.status is string && data.status.size() <= 50;
+    }
+
+    function isValidTask(data) {
+      return data.keys().hasAll(['title', 'assignee_id', 'status', 'created_at', 'created_by']) &&
+             data.title is string && data.title.size() <= 200 &&
+             data.assignee_id is string && isValidId(data.assignee_id) &&
+             data.status in ['pending', 'in-progress', 'completed'];
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['sender_id', 'sender_name', 'content', 'created_at', 'status']) &&
+             data.sender_id is string && data.sender_id == request.auth.uid &&
+             data.content is string && data.content.size() <= 5000;
+    }
+
+    // --- COLLECTION RULES ---
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isOwner(userId) && isValidUser(incoming()) && incoming().role == 'Staff'; // Default role for self-reg
+      allow update: if (isSignedIn() && isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone_number', 'updated_at'])) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /attendance/{atId} {
+      allow read: if isStaff() || isOwner(existing().staff_id);
+      allow create: if isSignedIn() && isOwner(incoming().staff_id) && isValidAttendance(incoming()) && incoming().clock_in == request.time;
+      allow update: if (isSignedIn() && isOwner(existing().staff_id) && incoming().diff(existing()).affectedKeys().hasOnly(['clock_out', 'status']) && incoming().clock_out == request.time) || isAdmin();
+      allow delete: if isAdmin() || isHR();
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() || isHR();
+      allow update: if (isSignedIn() && (
+        (isOwner(existing().assignee_id) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'completion_date', 'updated_at'])) || 
+        isAdmin() || isHR()
+      ));
+      allow delete: if isAdmin();
+    }
+
+    match /messages/{messageId} {
+      allow read: if isSignedIn() && (existing().recipient_id == null || isOwner(existing().recipient_id) || isOwner(existing().sender_id));
+      allow list: if isSignedIn() && (resource.data.recipient_id == null || resource.data.recipient_id == request.auth.uid || resource.data.sender_id == request.auth.uid);
+      allow create: if isSignedIn() && isValidMessage(incoming()) && incoming().sender_id == request.auth.uid;
+      allow update: if isSignedIn() && isOwner(existing().recipient_id) && incoming().diff(existing()).affectedKeys().hasOnly(['status']) && incoming().status == 'read';
+      allow delete: if isAdmin();
+    }
+
+    match /leave_requests/{requestId} {
+      allow read: if isStaff() || isOwner(existing().staff_id);
+      allow create: if isSignedIn() && isOwner(incoming().staff_id) && incoming().status == 'Pending';
+      allow update: if (isAdmin() || isHR()) && incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+      allow delete: if isOwner(existing().staff_id) && existing().status == 'Pending' || isAdmin();
+    }
+
+    match /announcements/{annId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isHR();
+    }
+
+    match /media/{fileId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow delete: if isAdmin() || isHR();
+    }
+
+    match /notifications/{notifId} {
+      allow read, update, delete: if isOwner(existing().user_id);
+      allow create: if isSignedIn(); // Any system process or user can add notification but usually internal
+    }
+
+    match /blogs/{blogId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /recognition/{recId} {
+      allow read: if isSignedIn();
+      allow create: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /inquiries/{inqId} {
+      allow read, update, delete: if isAdmin() || isHR();
+      allow create: if true; // Public contact form
+    }
+
+    match /bookings/{bookId} {
+      allow read: if isAdmin() || isHR();
+      allow create: if true; // Public booking
+      allow update: if (isAdmin() || isHR());
+      allow delete: if isAdmin();
+    }
+  }
+}

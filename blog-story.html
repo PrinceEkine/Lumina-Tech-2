@@ -173,7 +173,8 @@
 
   <script type="module" src="/script.js"></script>
   <script type="module">
-    import { supabase } from './supabase';
+    import { db } from './firebase';
+    import { doc, getDoc } from 'firebase/firestore';
     
     window.addEventListener('DOMContentLoaded', async () => {
       const params = new URLSearchParams(window.location.search);
@@ -185,22 +186,21 @@
       }
 
       try {
-        const { data: story, error } = await supabase
-          .from('blogs')
-          .select('*')
-          .eq('id', id)
-          .single();
+        const docRef = doc(db, 'blogs', id);
+        const docSnap = await getDoc(docRef);
 
-        if (error || !story) {
-          console.error("Story not found:", error);
-          // Fallback to static if needed or redirect
+        if (!docSnap.exists()) {
+          console.error("Story not found");
           window.location.href = '/blog.html';
           return;
         }
 
+        const story = docSnap.data();
+
         document.getElementById('story-title').innerText = story.title;
         document.getElementById('story-category').innerText = story.category;
-        document.getElementById('story-date').innerText = new Date(story.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        const createdAt = story.created_at?.toDate ? story.created_at.toDate() : new Date(story.created_at || Date.now());
+        document.getElementById('story-date').innerText = createdAt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
         document.getElementById('story-image').src = story.image_url;
         document.getElementById('story-body').innerHTML = story.content;
         

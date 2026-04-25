@@ -26,7 +26,7 @@
       position: sticky;
       top: 0;
       height: 100vh;
-      z-index: 1000;
+      z-index: 2005;
       transition: transform 0.3s ease;
       overflow-y: auto;
       scrollbar-width: thin;
@@ -126,6 +126,7 @@
         top: 0;
         transform: translateX(-100%);
         width: 280px;
+        z-index: 2100;
       }
       .sidebar.show {
         transform: translateX(0);
@@ -156,6 +157,8 @@
       </button>
     </div>
   </div>
+
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
 
   <div class="admin-container">
     <!-- Sidebar -->
@@ -973,56 +976,84 @@
       </section>
 
       <!-- Chat Section -->
-      <section id="chat-view" class="hidden">
-        <h2 class="text-2xl font-bold mb-8">Team <span class="text-cyan-400">Communication</span></h2>
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8 h-[650px]">
-          <!-- Chat Sidebar: Staff List -->
-          <div class="lg:col-span-1 glass flex flex-col overflow-hidden">
-            <div class="p-4 border-b border-white/10 bg-white/5">
-              <h3 class="font-bold text-sm uppercase tracking-wider text-slate-400">Contacts</h3>
+      <section id="chat-view" class="hidden h-full">
+        <div class="chat-container-wa border border-white/10 overflow-hidden rounded-xl shadow-2xl">
+          <!-- Sidebar: Contact List -->
+          <div id="chat-sidebar" class="chat-sidebar-wa">
+            <div class="p-4 bg-[#202c33] flex items-center justify-between border-b border-black/10">
+              <div id="my-chat-avatar" class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">A</div>
+              <div class="flex gap-4 text-slate-400">
+                <i class="fas fa-circle-notch cursor-pointer hover:text-white"></i>
+                <i class="fas fa-comment shadow-sm cursor-pointer hover:text-white"></i>
+                <i class="fas fa-ellipsis-v cursor-pointer hover:text-white"></i>
+              </div>
             </div>
-            <div id="chat-contact-list" class="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
-              <!-- Chat contacts will be populated here -->
-              <div class="text-center py-4 text-[10px] text-slate-500">Loading contacts...</div>
+            <div class="p-2">
+              <div class="relative bg-[#202c33] rounded-lg px-3 py-1 flex items-center gap-3">
+                <i class="fas fa-search text-xs text-slate-500"></i>
+                <input type="text" placeholder="Search or start new chat" class="bg-transparent border-none text-xs text-white outline-none w-full py-1">
+              </div>
+            </div>
+            <div id="chat-contact-list" class="flex-1 overflow-y-auto scrollbar-thin">
+              <!-- Contact list will be populated here -->
+              <div class="text-center py-8 text-slate-500 text-xs italic">Loading contacts...</div>
+            </div>
+            <div class="p-4 text-center border-t border-[#202c33] shrink-0">
+              <p class="text-[10px] text-slate-500 flex items-center justify-center gap-1">
+                <i class="fas fa-lock text-[8px]"></i> End-to-end encrypted
+              </p>
             </div>
           </div>
 
-          <!-- Chat Window -->
-          <div class="lg:col-span-3 glass flex flex-col overflow-hidden">
-            <div class="p-4 border-b border-white/10 bg-white/5 flex justify-between items-center">
-              <div class="flex items-center gap-3">
-                <div id="active-chat-avatar" class="w-10 h-10 rounded-full bg-cyan-500 flex items-center justify-center text-black font-bold">G</div>
-                <div>
-                  <h3 id="active-chat-name" class="font-bold">Global Chat</h3>
-                  <p id="active-chat-status" class="text-[10px] text-cyan-400">Public Channel</p>
-                </div>
+          <!-- Main Chat Area -->
+          <div class="chat-main-wa">
+            <!-- Chat Header -->
+            <div class="chat-header-wa">
+              <button id="chat-back-btn" class="back-btn-wa text-cyan-400 text-xl mr-2">
+                <i class="fas fa-arrow-left"></i>
+              </button>
+              <div id="active-chat-avatar" class="w-10 h-10 rounded-full bg-cyan-500 flex items-center justify-center text-black font-bold">G</div>
+              <div class="flex-1">
+                <h3 id="active-chat-name" class="font-bold text-white text-sm">Global Chat</h3>
+                <p id="active-chat-status" class="text-[10px] text-cyan-400">Public Channel</p>
+              </div>
+              <div class="flex gap-5 text-slate-400">
+                <i class="fas fa-search cursor-pointer hover:text-white"></i>
+                <i class="fas fa-ellipsis-v cursor-pointer hover:text-white"></i>
               </div>
             </div>
             
-            <div id="chat-messages" class="flex-1 overflow-y-auto p-6 flex flex-col gap-4 relative">
-              <!-- Messages will be populated here -->
-              <div class="text-center py-12 text-slate-500">Select a contact to start chatting</div>
+            <!-- Chat Messages -->
+            <div id="chat-messages" class="chat-messages-wa scrollbar-thin">
+              <!-- Content will be populated by JS -->
             </div>
 
             <!-- Typing Indicator -->
-            <div id="typing-indicator" class="px-6 py-2 h-8 hidden">
-              <p class="text-[10px] text-cyan-400 italic flex items-center gap-2">
-                <span class="flex gap-1">
-                  <span class="w-1 h-1 bg-cyan-400 rounded-full animate-bounce"></span>
-                  <span class="w-1 h-1 bg-cyan-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                  <span class="w-1 h-1 bg-cyan-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
-                </span>
-                <span id="typing-text">Someone is typing...</span>
-              </p>
+            <div id="typing-indicator" class="px-6 py-1 h-6 hidden z-10">
+              <p class="text-[10px] text-emerald-400 italic">Someone is typing...</p>
             </div>
 
-            <div class="p-4 border-t border-white/10 bg-slate-900/50">
-              <form id="team-chat-form" class="flex gap-4">
-                <input type="text" id="chat-input" placeholder="Type your message..." required class="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 focus:outline-none focus:border-cyan-500">
-                <button type="submit" class="btn-primary px-6"><i class="fas fa-paper-plane"></i></button>
+            <!-- Chat Input -->
+            <div class="chat-input-wa">
+              <div class="flex gap-4 text-slate-400 text-lg">
+                <i class="far fa-smile cursor-pointer hover:text-white"></i>
+                <i class="fas fa-paperclip cursor-pointer hover:text-white"></i>
+              </div>
+              <form id="team-chat-form" class="flex-1 flex items-center gap-3">
+                <input type="text" id="chat-input" placeholder="Type a message" required 
+                  class="flex-1 bg-[#2a3942] border-none text-white rounded-lg px-4 py-2 outline-none text-sm placeholder:text-slate-500">
+                <button type="submit" class="text-slate-400 hover:text-cyan-400 text-xl transition-colors">
+                  <i class="fas fa-paper-plane"></i>
+                </button>
               </form>
+              <div class="text-slate-400 text-xl">
+                <i class="fas fa-microphone cursor-pointer hover:text-white"></i>
+              </div>
             </div>
           </div>
+        </div>
+        <div class="encrypted-notice mt-4">
+          <i class="fas fa-lock text-xs"></i> Your messages are end-to-end encrypted. Lumina Tech cannot read your conversations.
         </div>
       </section>
 
@@ -1165,7 +1196,7 @@
       </section>
 
       <!-- Staff Management Section -->
-      <section id="staff-view" class="hidden">
+      <section id="staff-view" class="hidden admin-only">
         <div class="flex justify-between items-center mb-8">
           <h2 class="text-2xl font-bold">Staff <span class="text-cyan-400">Management</span></h2>
           <button id="add-staff-btn" class="bg-cyan-500 hover:bg-cyan-600 text-black font-bold px-6 py-2 rounded-lg transition-colors">

@@ -14,10 +14,11 @@
   "dependencies": {
     "@google/genai": "^1.29.0",
     "@sendgrid/mail": "^8.1.6",
-    "@supabase/supabase-js": "^2.101.0",
     "@tailwindcss/vite": "^4.1.14",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "firebase": "^12.12.1",
+    "firebase-admin": "^13.8.0",
     "nodemailer": "^8.0.4",
     "resend": "^6.10.0",
     "serverless-http": "^4.0.0",

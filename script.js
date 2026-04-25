@@ -125,7 +125,33 @@
   -- go to RLS settings in Supabase and ensure users have INSERT/SELECT permissions.
 */
 
-import { supabase } from './supabase';
+import { auth, db } from './firebase';
+import { 
+  onAuthStateChanged, 
+  signInWithEmailAndPassword,
+  updateProfile,
+  updatePassword,
+  signOut
+} from 'firebase/auth';
+import { 
+  collection, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  setDoc, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  where, 
+  orderBy, 
+  onSnapshot,
+  limit,
+  Timestamp,
+  serverTimestamp,
+  or,
+  and
+} from 'firebase/firestore';
 import { isAdmin, logout as authLogout } from './auth';
 import { setupTheme, CurrencyManager, setupCurrencySelectors } from './ui';
 import { showToast, setLoading, sendEmail } from './utils';
@@ -255,125 +281,121 @@ let chatChannel = null;
 
 // Auth State Listener
 try {
-  if (supabase && supabase.auth) {
-    supabase.auth.onAuthStateChange(async (event, session) => {
-      const user = session?.user;
-      myId = user?.id;
-      const path = window.location.pathname;
-      const isHome = path === '/' || path.includes('index.html');
-      const isUserAdmin = await isAdmin(user);
+  onAuthStateChanged(auth, async (user) => {
+    myId = user?.uid;
+    const path = window.location.pathname;
+    const isHome = path === '/' || path.includes('index.html');
+    const isUserAdmin = await isAdmin(user);
+    
+    // Auto-redirect from home to admin if logged in
+    if (user && isHome) {
+      window.location.href = '/admin.html';
+      return;
+    }
+    
+    if (user) {
+      document.body.classList.add('is-logged-in');
       
-      // Auto-redirect from home to admin if logged in
-      if (user && isHome) {
-        window.location.href = '/admin.html';
-        return;
+      const homeStaffBtn = document.getElementById('staff-login-btn');
+      const headerLogoutBtn = document.getElementById('header-logout-btn');
+      if (isHome) {
+        if (homeStaffBtn) {
+          homeStaffBtn.innerText = 'Dashboard';
+          homeStaffBtn.onclick = () => window.location.href = '/admin.html';
+        }
+        if (headerLogoutBtn) {
+          headerLogoutBtn.classList.remove('hidden');
+          headerLogoutBtn.onclick = authLogout;
+        }
       }
-      
-      // Show/hide currency selector based on login status
-      if (user) {
-        document.body.classList.add('is-logged-in');
-        
-        // Update home page buttons if logged in
-        const homeStaffBtn = document.getElementById('staff-login-btn');
-        const headerLogoutBtn = document.getElementById('header-logout-btn');
-        if (isHome) {
-          if (homeStaffBtn) {
-            homeStaffBtn.innerText = 'Dashboard';
-            homeStaffBtn.onclick = () => window.location.href = '/admin.html';
-          }
-          if (headerLogoutBtn) {
-            headerLogoutBtn.classList.remove('hidden');
-            headerLogoutBtn.addEventListener('click', authLogout);
-          }
-        }
 
-        if (isUserAdmin) {
-          localStorage.setItem('isAdminSession', 'true');
-        } else {
-          localStorage.removeItem('isAdminSession');
-        }
+      if (isUserAdmin) {
+        localStorage.setItem('isAdminSession', 'true');
       } else {
-        document.body.classList.remove('is-logged-in');
         localStorage.removeItem('isAdminSession');
       }
+    } else {
+      document.body.classList.remove('is-logged-in');
+      localStorage.removeItem('isAdminSession');
+    }
 
-      if (path.includes('admin.html')) {
-        if (!user) {
-          window.location.href = '/';
-          return;
-        }
+    if (path.includes('admin.html')) {
+      if (!user) {
+        window.location.href = '/';
+        return;
+      }
 
-        // Determine Role
-        userRole = 'Staff';
-        userName = user.user_metadata?.full_name || user.email.split('@')[0];
-        userUsername = user.user_metadata?.username || user.email.split('@')[0];
+      // Determine Role
+      userRole = 'Staff';
+      userName = user.displayName || user.email.split('@')[0];
+      userUsername = user.email.split('@')[0];
 
-        if (isUserAdmin) {
-          userRole = 'Admin';
-          document.body.classList.add('is-admin');
-          document.body.classList.remove('is-staff', 'is-hr');
-        } else {
-          // Check staff table for role
-          try {
-            const { data: staffData, error } = await supabase
-              .from('staff')
-              .select('*')
-              .eq('email', user.email)
-              .single();
-            
-            if (error || !staffData) {
-              // Not a registered staff member
-              await supabase.auth.signOut();
-              window.location.href = '/';
-              return;
-            }
-            
-            userRole = staffData.role;
-            userName = staffData.name;
-            userUsername = staffData.username || user.user_metadata?.username || user.email.split('@')[0];
-            
-            document.body.classList.add('is-staff');
-            if (userRole === 'HR') {
-              document.body.classList.add('is-hr');
-            } else {
-              document.body.classList.remove('is-hr');
-            }
-            document.body.classList.remove('is-admin');
-          } catch (err) {
-            console.error("Role check failed:", err);
-            window.location.href = '/';
-            return;
+      if (isUserAdmin) {
+        userRole = 'Admin';
+        document.body.classList.add('is-admin');
+        document.body.classList.remove('is-staff', 'is-hr');
+      } else {
+        // Check users collection for role
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          
+          if (!userDoc.exists()) {
+            // Auto-register if not exists
+            const newUser = {
+              id: user.uid,
+              name: userName,
+              email: user.email,
+              username: userUsername,
+              role: 'Staff',
+              status: 'Active',
+              created_at: serverTimestamp()
+            };
+            await setDoc(doc(db, 'users', user.uid), newUser);
+            userRole = 'Staff';
+          } else {
+            const userData = userDoc.data();
+            userRole = userData.role;
+            userName = userData.name;
+            userUsername = userData.username || user.email.split('@')[0];
           }
+          
+          // Role Based Visibility
+          document.body.classList.remove('is-admin', 'is-hr', 'is-staff');
+          if (userRole === 'Admin' || userRole === 'CEO' || userRole === 'Ass CEO') {
+            document.body.classList.add('is-admin');
+          } else if (userRole === 'HR') {
+            document.body.classList.add('is-hr');
+          } else {
+            document.body.classList.add('is-staff');
+          }
+        } catch (err) {
+          console.error("Role check failed:", err);
         }
+      }
 
-        // Update Sidebar Profile
-        const sidebarName = document.getElementById('user-name-sidebar');
-        const sidebarRole = document.getElementById('user-role-sidebar');
-        const sidebarAvatar = document.getElementById('user-avatar-sidebar');
-        const headerName = document.getElementById('user-name-header');
-        const headerAvatar = document.getElementById('user-avatar-header');
+      // Update UI elements
+      const updateText = (id, text) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = text;
+      };
+      const updateValue = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+      };
 
-        if (sidebarName) sidebarName.innerText = userName;
-        if (sidebarRole) sidebarRole.innerText = userRole;
-        if (sidebarAvatar) sidebarAvatar.innerText = userName.charAt(0).toUpperCase();
-        if (headerName) headerName.innerText = userName;
-        if (headerAvatar) headerAvatar.innerText = userName.charAt(0).toUpperCase();
-        
-        const headerUsername = document.getElementById('user-username-header');
-        if (headerUsername) headerUsername.innerText = `@${userUsername}`;
+      updateText('user-name-sidebar', userName);
+      updateText('user-role-sidebar', userRole);
+      updateText('user-avatar-sidebar', userName.charAt(0).toUpperCase());
+      updateText('user-name-header', userName);
+      updateText('user-avatar-header', userName.charAt(0).toUpperCase());
+      updateText('user-username-header', `@${userUsername}`);
+      updateText('welcome-name', userName);
+      updateValue('settings-name', userName);
+      updateValue('settings-username', userUsername);
+      updateValue('settings-email', user.email);
 
-        const welcomeName = document.getElementById('welcome-name');
-        if (welcomeName) welcomeName.innerText = userName;
-
-        const settingsName = document.getElementById('settings-name');
-        const settingsUsername = document.getElementById('settings-username');
-        const settingsEmail = document.getElementById('settings-email');
-        if (settingsName) settingsName.value = userName;
-        if (settingsUsername) settingsUsername.value = userUsername;
-        if (settingsEmail) settingsEmail.value = user.email;
-
-        // Initial Data Fetch
-      if (userRole === 'Admin' || userRole === 'HR') {
+      // Data Fetching
+      if (userRole === 'Admin' || userRole === 'HR' || userRole === 'CEO' || userRole === 'Ass CEO') {
         fetchDashboardStats();
         fetchBookings();
         fetchStaff();
@@ -385,17 +407,15 @@ try {
         fetchStaffDashboardStats();
         fetchNotifications();
         checkTaskReminders();
-          
-          // Task Status Filter Event Listener
-          const taskStatusFilter = document.getElementById('task-status-filter');
-          if (taskStatusFilter) {
-            taskStatusFilter.addEventListener('change', fetchMyTasks);
-          }
+        
+        const taskStatusFilter = document.getElementById('task-status-filter');
+        if (taskStatusFilter) {
+          taskStatusFilter.addEventListener('change', fetchMyTasks);
         }
       }
-    });
-  }
-} catch (err) { console.error("Supabase auth failed:", err); }
+    }
+  });
+} catch (err) { console.error("Firebase auth listener failed:", err); }
 
 // Chat Widget
 const chatBtn = document.getElementById('chat-btn');
@@ -475,52 +495,25 @@ forms.forEach(form => {
       
       const email = username.includes('@') ? username : `${username}@lumina.tech`;
 
-      // Configuration Check
-      const isSupabaseConfigured = import.meta.env.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder');
-      if (!isSupabaseConfigured) {
-        showToast('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your deployment settings and redeploy.', 'error');
-        setLoading(submitBtn, false, originalText);
-        return;
-      }
-
       try {
-        // Attempt Email/Password Login for everyone
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: email,
-          password: password
-        });
-
-        if (error) {
-          throw error;
-        }
-
-        const user = data.user;
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
         const isUserAdmin = await isAdmin(user);
         
-        // 1. Ensure user (especially Admin) is in the staff table so they show up in chat
-        try {
-          const { data: existingStaff } = await supabase
-            .from('staff')
-            .select('*')
-            .eq('email', user.email)
-            .maybeSingle();
-
-          if (!existingStaff) {
-            await supabase.from('staff').insert([{
-              id: user.id,
-              name: user.user_metadata?.full_name || user.email.split('@')[0],
-              email: user.email,
-              username: user.email.split('@')[0],
-              role: isUserAdmin ? 'Admin' : 'Staff',
-              status: 'Active',
-              created_at: new Date().toISOString()
-            }]);
-          }
-        } catch ( staffErr ) {
-          console.error("Auto-registration failed:", staffErr);
+        // Ensure user doc exists with role
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (!userDoc.exists()) {
+          await setDoc(doc(db, 'users', user.uid), {
+            id: user.uid,
+            name: user.displayName || user.email.split('@')[0],
+            email: user.email,
+            username: user.email.split('@')[0],
+            role: isUserAdmin ? 'Admin' : 'Staff',
+            status: 'Active',
+            created_at: serverTimestamp()
+          });
         }
 
-        // Set admin session flag for UI consistency
         if (isUserAdmin) {
           localStorage.setItem('isAdminSession', 'true');
         } else {
@@ -535,26 +528,15 @@ forms.forEach(form => {
 
       } catch (error) {
         console.error("Login error:", error);
-        
-        let errorMsg = error.message || 'An unexpected error occurred.';
-        if (errorMsg === 'Failed to fetch') {
-          errorMsg = 'Connection error: Could not reach the server. Please check your internet connection or Supabase configuration.';
+        let errorMsg = error.message;
+        if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+          errorMsg = 'Invalid email or password.';
         }
-        
         showToast(`Login error: ${errorMsg}`, 'error');
-        
-        // Check if it's an admin trying to login but Google OAuth is expected
-        const isAdminEmail = await isAdmin({ email: email });
-        if (isAdminEmail && error.message.includes('Invalid login credentials')) {
-          showToast('Admin login failed. If you usually use Google, please ensure it is enabled in Supabase.', 'error');
-        } else {
-          showToast('Login failed: ' + error.message, 'error');
-        }
-        
         setLoading(submitBtn, false, originalText);
       }
     }
- else if (form.classList.contains('booking-form')) {
+  else if (form.classList.contains('booking-form')) {
       const name = document.getElementById('name').value;
       const email = document.getElementById('email').value;
       const service = document.getElementById('service').value;
@@ -562,29 +544,16 @@ forms.forEach(form => {
       const time = document.getElementById('time').value;
       
       try {
-        // 1. Try to save to Supabase
-        const isSupabaseConfigured = import.meta.env.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder');
-        
-        if (isSupabaseConfigured) {
-          const { error } = await supabase
-            .from('bookings')
-            .insert([{
-              client_name: name,
-              email: email,
-              service: service,
-              date: date,
-              time: time,
-              status: 'Pending',
-              created_at: new Date().toISOString()
-            }]);
-
-          if (error) {
-            console.error("Supabase insert error:", error);
-            // We don't throw yet, we'll try email as fallback/secondary
-          }
-        } else {
-          console.warn("Supabase not configured. Skipping DB insert.");
-        }
+        // 1. Save to Firestore
+        await addDoc(collection(db, 'bookings'), {
+          client_name: name,
+          email: email,
+          service: service,
+          date: date,
+          time: time,
+          status: 'Pending',
+          created_at: serverTimestamp()
+        });
 
         // 2. Send Email Notification
         try {
@@ -594,8 +563,7 @@ forms.forEach(form => {
             `Hi ${name},\n\nYour booking for ${service} on ${date} at ${time} has been received. We will contact you shortly to confirm.\n\nBest regards,\nLumina Tech Team`
           );
           
-          // Also notify admin (optional, using a placeholder admin email if not set)
-          const adminEmail = 'princedagogoekine@gmail.com'; // User's email from context
+          const adminEmail = 'princedagogoekine@gmail.com'; 
           await sendEmail(
             adminEmail,
             'New Booking Received',
@@ -603,10 +571,6 @@ forms.forEach(form => {
           );
         } catch (emailErr) {
           console.error("Failed to send confirmation email:", emailErr);
-          // If Supabase also failed, then we show error
-          if (!isSupabaseConfigured) {
-             throw new Error("Could not save booking or send email. Please check your connection.");
-          }
         }
 
         showToast('Booking received! Check your email for confirmation.', 'success');
@@ -628,21 +592,34 @@ forms.forEach(form => {
         const name = document.getElementById('staff-name').value;
         const role = document.getElementById('staff-role').value;
 
-        const response = await fetch('/api/create-staff', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, name, role, phone })
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Failed to create staff');
+        try {
+          const response = await fetch('/api/create-staff', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, name, role, phone }),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
 
-        showToast(`Staff account for ${name} created successfully!`, 'success');
-        form.reset();
-        setLoading(submitBtn, false, originalText);
-        if (staffModal) staffModal.classList.remove('show');
-        
-        if (typeof fetchStaff === 'function') fetchStaff();
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || 'Failed to create staff');
+
+          showToast(`Staff account for ${name} created successfully!`, 'success');
+          form.reset();
+          setLoading(submitBtn, false, originalText);
+          if (staffModal) staffModal.classList.remove('show');
+          
+          if (typeof fetchStaff === 'function') fetchStaff();
+        } catch (fetchErr) {
+          clearTimeout(timeoutId);
+          if (fetchErr.name === 'AbortError') {
+            throw new Error('Request timed out. The server might be busy or misconfigured.');
+          }
+          throw fetchErr;
+        }
       } catch (error) {
         console.error("Error creating staff:", error);
         showToast('Error: ' + error.message, 'error');
@@ -655,24 +632,17 @@ forms.forEach(form => {
         const subject = form.querySelector('#subject').value;
         const message = form.querySelector('#message').value;
 
-        // 1. Try to save to Supabase
-        const isSupabaseConfigured = import.meta.env.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder');
-        
-        if (isSupabaseConfigured) {
-          const { error } = await supabase
-            .from('contact_messages')
-            .insert([{
-              name,
-              email,
-              subject,
-              message,
-              created_at: new Date().toISOString()
-            }]);
+        // Save to Firestore
+        await addDoc(collection(db, 'inquiries'), {
+          name,
+          email,
+          subject,
+          message,
+          status: 'new',
+          created_at: serverTimestamp()
+        });
 
-          if (error) console.error("Supabase insert error:", error);
-        }
-
-        // 2. Mock Email Notification
+        // Email Notification
         await sendEmail(
           'princedagogoekine@gmail.com',
           `New Contact Inquiry: ${subject}`,
@@ -685,14 +655,14 @@ forms.forEach(form => {
       } catch (error) {
         console.error("Error processing contact form:", error);
         showToast('Transmission failed. Using backup protocols...', 'info');
-        // Simple fallback
         setTimeout(() => {
           showToast('Message cached. We will process it soon.', 'success');
           form.reset();
           setLoading(submitBtn, false, originalText);
         }, 1500);
       }
-    } else {
+    }
+ else {
       submitBtn.innerText = 'Success!';
       submitBtn.style.background = '#10b981'; // Emerald
       form.reset();
@@ -712,17 +682,22 @@ forms.forEach(form => {
 // Admin Mobile Toggle
 const adminMobileToggle = document.getElementById('admin-mobile-toggle');
 const sidebar = document.querySelector('.sidebar');
+const sidebarOverlay = document.getElementById('sidebar-overlay');
 
 if (adminMobileToggle && sidebar) {
-  adminMobileToggle.addEventListener('click', () => {
+  const toggleSidebar = () => {
     sidebar.classList.toggle('show');
+    if (sidebarOverlay) sidebarOverlay.classList.toggle('show');
     const icon = adminMobileToggle.querySelector('i');
     if (sidebar.classList.contains('show')) {
       icon.classList.replace('fa-bars', 'fa-times');
     } else {
       icon.classList.replace('fa-times', 'fa-bars');
     }
-  });
+  };
+
+  adminMobileToggle.addEventListener('click', toggleSidebar);
+  if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
 }
 
 // Admin Portal Navigation
@@ -806,6 +781,14 @@ const setupNavLink = (nav, view, fetchFn) => {
       e.preventDefault();
       showView(view, nav);
       if (fetchFn) fetchFn();
+      
+      // Auto-close sidebar on mobile after navigation
+      if (window.innerWidth <= 1024 && sidebar && sidebar.classList.contains('show')) {
+        sidebar.classList.remove('show');
+        if (sidebarOverlay) sidebarOverlay.classList.remove('show');
+        const icon = adminMobileToggle?.querySelector('i');
+        if (icon) icon.classList.replace('fa-times', 'fa-bars');
+      }
     });
   }
 };
@@ -845,53 +828,52 @@ async function fetchChatContacts() {
   if (!chatContactList) return;
   
   try {
-    const { data: staff, error } = await supabase
-      .from('staff')
-      .select('id, name, role')
-      .order('name');
+    const q = query(collection(db, 'users'), where('role', '!=', 'Client'), orderBy('name'));
+    const snapshot = await getDocs(q);
+    const staff = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
-    if (error) throw error;
-
-    const userResponse = await supabase.auth.getUser();
-    const myId = userResponse.data.user?.id;
+    const myId = auth.currentUser?.uid;
 
     // Keep the Global Chat item
-    const globalItem = `
-      <div class="p-3 rounded-lg ${activeRecipient === 'global' ? 'bg-cyan-500/20 border border-cyan-500/30' : 'hover:bg-white/5 border border-transparent'} cursor-pointer flex items-center gap-3 transition-all chat-contact" data-recipient="global">
-        <div class="w-8 h-8 rounded-full bg-cyan-500 flex items-center justify-center text-black font-bold text-xs">G</div>
+    const globalItemHtml = `
+      <div class="contact-wa ${activeRecipient === 'global' ? 'active' : ''} chat-contact" data-recipient="global">
+        <div class="w-12 h-12 rounded-full bg-[#00a884] flex items-center justify-center text-white font-bold text-lg">G</div>
         <div class="flex-1 min-w-0">
-          <p class="text-sm font-bold truncate">Global Chat</p>
-          <p class="text-[10px] text-slate-400 truncate">Everyone in the team</p>
+          <div class="flex justify-between items-center mb-0.5">
+            <p class="text-sm font-bold text-white truncate">Global Chat</p>
+          </div>
+          <p class="text-xs text-slate-400 truncate">Team announcement channel</p>
         </div>
       </div>
     `;
 
-    chatContactList.innerHTML = globalItem;
+    chatContactList.innerHTML = globalItemHtml;
 
     if (staff.length <= (staff.some(s => s.id === myId) ? 1 : 0)) {
       const emptyMsg = document.createElement('div');
-      emptyMsg.className = 'p-8 text-center text-slate-500 text-xs';
+      emptyMsg.className = 'p-8 text-center text-slate-500 text-xs italic';
       emptyMsg.innerText = 'No other team members found.';
       chatContactList.appendChild(emptyMsg);
     }
 
     staff.forEach(person => {
-      // Don't show self in contact list
-      if (person.id === myId) return;
+      if (person.id === auth.currentUser?.uid) return;
 
       const contactDiv = document.createElement('div');
-      contactDiv.className = `p-3 rounded-lg ${activeRecipient === person.id ? 'bg-cyan-500/20 border border-cyan-500/30' : 'hover:bg-white/5 border border-transparent'} cursor-pointer flex items-center gap-3 transition-all chat-contact`;
+      contactDiv.className = `contact-wa ${activeRecipient === person.id ? 'active' : ''} chat-contact`;
       contactDiv.dataset.recipient = person.id;
       contactDiv.dataset.name = person.name;
       contactDiv.dataset.role = person.role;
       
       contactDiv.innerHTML = `
-        <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold text-xs">
+        <div class="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold text-lg">
           ${person.name.charAt(0)}
         </div>
         <div class="flex-1 min-w-0">
-          <p class="text-sm font-bold truncate">${person.name}</p>
-          <p class="text-[10px] text-slate-400 truncate">${person.role}</p>
+          <div class="flex justify-between items-center mb-0.5">
+            <p class="text-sm font-bold text-white truncate">${person.name}</p>
+          </div>
+          <p class="text-xs text-slate-400 truncate">${person.role}</p>
         </div>
       `;
       
@@ -899,17 +881,16 @@ async function fetchChatContacts() {
         activeRecipient = person.id;
         activeChatName.innerText = person.name;
         activeChatAvatar.innerText = person.name.charAt(0);
-        activeChatAvatar.className = 'w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold';
+        activeChatAvatar.className = 'w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold text-lg';
         activeChatStatus.innerText = person.role;
         activeChatStatus.className = 'text-[10px] text-slate-400';
         
-        // Update active state in UI
-        document.querySelectorAll('.chat-contact').forEach(c => {
-          c.classList.remove('bg-cyan-500/20', 'border-cyan-500/30');
-          c.classList.add('hover:bg-white/5', 'border-transparent');
-        });
-        contactDiv.classList.add('bg-cyan-500/20', 'border-cyan-500/30');
-        contactDiv.classList.remove('hover:bg-white/5', 'border-transparent');
+        document.querySelectorAll('.chat-contact').forEach(c => c.classList.remove('active'));
+        contactDiv.classList.add('active');
+        
+        // Mobile view switch
+        const chatSidebarWA = document.querySelector('.chat-sidebar-wa');
+        if (chatSidebarWA) chatSidebarWA.classList.add('hidden-mobile');
         
         fetchChatMessages();
       });
@@ -917,25 +898,33 @@ async function fetchChatContacts() {
       chatContactList.appendChild(contactDiv);
     });
 
-    // Add listener to global item
     const globalBtn = chatContactList.querySelector('[data-recipient="global"]');
     if (globalBtn) {
       globalBtn.addEventListener('click', () => {
         activeRecipient = 'global';
         activeChatName.innerText = 'Global Chat';
         activeChatAvatar.innerText = 'G';
-        activeChatAvatar.className = 'w-10 h-10 rounded-full bg-cyan-500 flex items-center justify-center text-black font-bold';
+        activeChatAvatar.className = 'w-10 h-10 rounded-full bg-[#00a884] flex items-center justify-center text-white font-bold text-lg';
         activeChatStatus.innerText = 'Public Channel';
         activeChatStatus.className = 'text-[10px] text-cyan-400';
         
-        document.querySelectorAll('.chat-contact').forEach(c => {
-          c.classList.remove('bg-cyan-500/20', 'border-cyan-500/30');
-          c.classList.add('hover:bg-white/5', 'border-transparent');
-        });
-        globalBtn.classList.add('bg-cyan-500/20', 'border-cyan-500/30');
-        globalBtn.classList.remove('hover:bg-white/5', 'border-transparent');
+        document.querySelectorAll('.chat-contact').forEach(c => c.classList.remove('active'));
+        globalBtn.classList.add('active');
+        
+        // Mobile view switch
+        const chatSidebarWA = document.querySelector('.chat-sidebar-wa');
+        if (chatSidebarWA) chatSidebarWA.classList.add('hidden-mobile');
         
         fetchChatMessages();
+      });
+    }
+
+    // Chat Back Button for Mobile
+    const chatBackBtn = document.getElementById('chat-back-btn');
+    if (chatBackBtn) {
+      chatBackBtn.addEventListener('click', () => {
+        const chatSidebarWA = document.querySelector('.chat-sidebar-wa');
+        if (chatSidebarWA) chatSidebarWA.classList.remove('hidden-mobile');
       });
     }
 
@@ -944,99 +933,75 @@ async function fetchChatContacts() {
   }
 }
 
+let unsubscribeChat = null;
 async function fetchChatMessages() {
   if (!chatMessages) return;
+  if (unsubscribeChat) unsubscribeChat();
+
+  const user = auth.currentUser;
+  if (!user) return;
   
-  const userResponse = await supabase.auth.getUser();
-  const user = userResponse.data.user;
-  
-  if (!user) {
-    console.error("No active session found for chat.");
-    return;
+  const currentMyId = user.uid;
+  let q;
+
+  if (activeRecipient === 'global') {
+    q = query(
+      collection(db, 'messages'),
+      where('recipient_id', '==', null),
+      orderBy('created_at', 'asc')
+    );
+  } else {
+    q = query(
+      collection(db, 'messages'),
+      or(
+        and(where('sender_id', '==', currentMyId), where('recipient_id', '==', activeRecipient)),
+        and(where('sender_id', '==', activeRecipient), where('recipient_id', '==', currentMyId))
+      ),
+      orderBy('created_at', 'asc')
+    );
   }
-  
-  const currentMyId = user.id;
 
-  try {
-    let query = supabase.from('messages').select('*');
-
-    if (activeRecipient === 'global') {
-      query = query.is('recipient_id', null);
-    } else {
-      // Use or filter only if activeRecipient is a valid UUID
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(activeRecipient)) {
-        chatMessages.innerHTML = `<div class="text-center py-12 text-slate-500">Invalid contact ID.</div>`;
-        return;
-      }
-      query = query.or(`and(sender_id.eq.${currentMyId},recipient_id.eq.${activeRecipient}),and(sender_id.eq.${activeRecipient},recipient_id.eq.${currentMyId})`);
-    }
-
-    const { data, error } = await query.order('created_at', { ascending: true });
-
-    if (error) throw error;
-
-    // Mark messages as read if I'm the recipient
-    if (activeRecipient !== 'global' && data.length > 0) {
-      const unreadIds = data
-        .filter(m => m.recipient_id === currentMyId && m.status !== 'read')
-        .map(m => m.id);
-      
-      if (unreadIds.length > 0) {
-        await supabase.from('messages').update({ status: 'read' }).in('id', unreadIds);
-      }
-    }
-
+  unsubscribeChat = onSnapshot(q, (snapshot) => {
     chatMessages.innerHTML = '';
-    if (data.length === 0) {
-      chatMessages.innerHTML = `<div class="text-center py-12 text-slate-500">No messages with ${activeChatName.innerText} yet.</div>`;
+    if (snapshot.empty) {
+      chatMessages.innerHTML = `
+        <div class="flex flex-col items-center justify-center h-full gap-4 text-center opacity-40">
+          <div class="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-3xl">
+            <i class="fas fa-comment-slash"></i>
+          </div>
+          <p class="text-xs">No messages with ${activeChatName.innerText} yet.</p>
+        </div>`;
     } else {
-      data.forEach(msg => {
+      // Group by date would be nice, but let's keep it simple for now
+      snapshot.docs.forEach(docSnap => {
+        const msg = docSnap.data();
         const isMe = msg.sender_id === currentMyId;
         const msgDiv = document.createElement('div');
-        msgDiv.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'}`;
+        msgDiv.className = `msg-wa ${isMe ? 'outgoing' : 'incoming'}`;
         
-        let statusHtml = '';
-        if (isMe && activeRecipient !== 'global') {
-          const isRead = msg.status === 'read';
-          statusHtml = `<span class="text-[8px] mt-1 ${isRead ? 'text-cyan-400' : 'text-slate-500'}">
-            <i class="fas ${isRead ? 'fa-check-double' : 'fa-check'}"></i> ${isRead ? 'Read' : 'Sent'}
-          </span>`;
-        }
+        const isRead = msg.status === 'read';
+        const statusHtml = isMe && activeRecipient !== 'global' ? `
+          <span class="status-icon ${isRead ? 'text-cyan-400' : 'text-slate-500'}">
+            <i class="fas ${isRead ? 'fa-check-double' : 'fa-check'}"></i>
+          </span>` : '';
 
+        const date = msg.created_at?.toDate() || new Date();
+        const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        
         msgDiv.innerHTML = `
-          <div class="max-w-[80%] p-3 rounded-xl ${isMe ? 'bg-cyan-500 text-black' : 'bg-white/10 text-white'} relative">
-            ${activeRecipient === 'global' ? `<p class="text-[10px] opacity-60 mb-1">${msg.sender_name}</p>` : ''}
-            <p class="text-sm">${msg.content}</p>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="text-[10px] text-slate-500 mt-1">${new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-            ${statusHtml}
+          ${activeRecipient === 'global' && !isMe ? `<p class="text-[10px] font-bold text-cyan-400 mb-0.5">${msg.sender_name}</p>` : ''}
+          <div class="flex flex-col">
+            <span class="text-sm">${msg.content}</span>
+            <span class="time">${timeStr}${statusHtml}</span>
           </div>
         `;
         chatMessages.appendChild(msgDiv);
-      });
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-  } catch (err) {
-    console.error("Error fetching chat:", err);
-  }
-}
 
-if (chatInput) {
-  chatInput.addEventListener('input', () => {
-    if (activeRecipient === 'global') return;
-    
-    if (chatChannel) {
-      chatChannel.send({
-        type: 'broadcast',
-        event: 'typing',
-        payload: {
-          senderId: myId,
-          senderName: userName,
-          recipientId: activeRecipient
+        if (!isMe && activeRecipient !== 'global' && msg.status !== 'read') {
+          updateDoc(docSnap.ref, { status: 'read' });
         }
       });
+      chatMessages.scrollTop = chatMessages.scrollHeight;
     }
   });
 }
@@ -1048,52 +1013,25 @@ if (teamChatForm) {
     if (!content) return;
 
     try {
-      const userRes = await supabase.auth.getUser();
-      const user = userRes.data.user;
+      const user = auth.currentUser;
       if (!user) throw new Error("Log in to send messages");
       
-      const isAdmin = localStorage.getItem('isAdminSession') === 'true';
-      const senderName = isAdmin ? 'Admin' : (user.user_metadata?.full_name || user.email.split('@')[0] || 'Staff');
-      const senderId = user.id;
+      const isAdminFlag = localStorage.getItem('isAdminSession') === 'true';
+      const senderName = isAdminFlag ? 'Admin' : (user.displayName || user.email.split('@')[0]);
 
-      const messageData = {
-        sender_id: senderId,
+      await addDoc(collection(db, 'messages'), {
+        sender_id: user.uid,
         sender_name: senderName,
+        recipient_id: activeRecipient === 'global' ? null : activeRecipient,
         content: content,
-        created_at: new Date().toISOString(),
+        created_at: serverTimestamp(),
         status: 'sent'
-      };
+      });
 
-      if (activeRecipient !== 'global') {
-        messageData.recipient_id = activeRecipient;
-      }
-
-      // Optimistic Update
-      const isMe = true;
-      chatMessages.innerHTML = chatMessages.innerHTML.replace('<div class="text-center py-12 text-slate-500">Select a contact to start chatting</div>', '');
-      chatMessages.innerHTML = chatMessages.innerHTML.replace(`<div class="text-center py-12 text-slate-500">No messages with ${activeChatName.innerText} yet.</div>`, '');
-
-      const tempMsgDiv = document.createElement('div');
-      tempMsgDiv.className = 'flex flex-col items-end';
-      tempMsgDiv.innerHTML = `
-        <div class="max-w-[80%] p-3 rounded-xl bg-cyan-500 text-black relative">
-          <p class="text-sm">${content}</p>
-        </div>
-        <span class="text-[8px] mt-1 text-slate-500 italic">Sending...</span>
-      `;
-      chatMessages.appendChild(tempMsgDiv);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-
-      const { error } = await supabase
-        .from('messages')
-        .insert([messageData]);
-
-      if (error) throw error;
       chatInput.value = '';
-      fetchChatMessages();
     } catch (err) {
       console.error("Error sending message:", err);
-      showToast("Failed to send message. Please ensure the 'messages' table exists.", "error");
+      showToast("Failed to send message.", "error");
     }
   });
 }
@@ -1109,12 +1047,9 @@ async function fetchAnnouncements() {
   if (!announcementsList) return;
   
   try {
-    const { data, error } = await supabase
-      .from('announcements')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
+    const q = query(collection(db, 'announcements'), orderBy('created_at', 'desc'));
+    const snapshot = await getDocs(q);
+    const data = snapshot.docs.map(doc => doc.data());
 
     announcementsList.innerHTML = '';
     if (data.length === 0) {
@@ -1123,17 +1058,18 @@ async function fetchAnnouncements() {
       data.forEach(ann => {
         const annDiv = document.createElement('div');
         annDiv.className = 'glass p-6 border-l-4 border-cyan-500';
+        const date = ann.created_at?.toDate() || new Date();
         annDiv.innerHTML = `
           <div class="flex justify-between items-start mb-4">
             <h3 class="text-xl font-bold">${ann.title}</h3>
-            <span class="text-xs text-slate-400">${new Date(ann.created_at).toLocaleDateString()}</span>
+            <span class="text-xs text-slate-400">${date.toLocaleDateString()}</span>
           </div>
           <p class="text-slate-300 leading-relaxed">${ann.content}</p>
           <div class="mt-4 pt-4 border-t border-white/5 flex items-center gap-2">
             <div class="w-6 h-6 rounded-full bg-cyan-500/20 flex items-center justify-center text-[10px] text-cyan-400 font-bold">
-              ${ann.author_name.charAt(0)}
+              ${(ann.author_name || 'A').charAt(0)}
             </div>
-            <span class="text-xs text-slate-400">Posted by ${ann.author_name}</span>
+            <span class="text-xs text-slate-400">Posted by ${ann.author_name || 'Admin'}</span>
           </div>
         `;
         announcementsList.appendChild(annDiv);
@@ -1165,23 +1101,18 @@ if (addAnnouncementForm) {
     submitBtn.innerText = 'Posting...';
     submitBtn.disabled = true;
 
-      const userResponse = await supabase.auth.getUser();
-      const user = userResponse.data.user;
-      const isAdmin = localStorage.getItem('isAdminSession') === 'true';
-      const authorName = isAdmin ? 'Admin' : (user?.user_metadata?.full_name || 'Staff');
+    const user = auth.currentUser;
+    const isAdminFlag = localStorage.getItem('isAdminSession') === 'true';
+    const authorName = isAdminFlag ? 'Admin' : (user?.displayName || 'Staff');
 
-      try {
-        const { error } = await supabase
-          .from('announcements')
-          .insert([{
-            title: document.getElementById('announcement-title').value,
-            content: document.getElementById('announcement-content').value,
-            author_id: user?.id || null,
-            author_name: authorName,
-            created_at: new Date().toISOString()
-          }]);
-
-      if (error) throw error;
+    try {
+      await addDoc(collection(db, 'announcements'), {
+        title: document.getElementById('announcement-title').value,
+        content: document.getElementById('announcement-content').value,
+        author_id: user?.uid || null,
+        author_name: authorName,
+        created_at: serverTimestamp()
+      });
 
       submitBtn.innerText = 'Posted!';
       submitBtn.style.background = '#10b981';
@@ -1194,12 +1125,12 @@ if (addAnnouncementForm) {
         submitBtn.disabled = false;
         announcementModal.classList.remove('show');
       }, 2000);
-      } catch (err) {
-        console.error("Error posting announcement:", err);
-        showToast(`Failed to post: ${err.message || 'Unknown error'}`, 'error');
-        submitBtn.innerText = 'Error!';
-        submitBtn.disabled = false;
-      }
+    } catch (err) {
+      console.error("Error posting announcement:", err);
+      showToast(`Failed to post: ${err.message}`, 'error');
+      submitBtn.innerText = 'Error!';
+      submitBtn.disabled = false;
+    }
   });
 }
 
@@ -1226,18 +1157,13 @@ if (sendEmailForm) {
       });
 
       const result = await response.json();
-      
       if (result.error) throw new Error(result.error);
 
       showToast('Email sent successfully!', 'success');
       sendEmailForm.reset();
     } catch (err) {
       console.error("Error sending email:", err);
-      let errorMsg = err.message || 'An unexpected error occurred.';
-      if (errorMsg === 'Failed to fetch') {
-        errorMsg = 'Connection error: Could not reach the email server. Please check your connection.';
-      }
-      showToast(`Error: ${errorMsg}`, 'error');
+      showToast(`Error: ${err.message}`, 'error');
     } finally {
       submitBtn.innerText = originalText;
       submitBtn.disabled = false;
@@ -1250,17 +1176,12 @@ async function fetchStreaks() {
   if (!streaksView || streaksView.classList.contains('hidden')) return;
 
   try {
-    const userResponse = await supabase.auth.getUser();
-    const user = userResponse.data.user;
+    const user = auth.currentUser;
     if (!user) return;
 
-    // Fetch all attendance to calculate streaks
-    const { data: allAttendance, error } = await supabase
-      .from('attendance')
-      .select('staff_id, staff_name, date')
-      .order('date', { ascending: false });
-
-    if (error) throw error;
+    const q = query(collection(db, 'attendance'), orderBy('date', 'desc'));
+    const snapshot = await getDocs(q);
+    const allAttendance = snapshot.docs.map(doc => doc.data());
 
     const staffStreaks = {};
     const today = new Date().toISOString().split('T')[0];
@@ -1272,46 +1193,35 @@ async function fetchStreaks() {
           name: record.staff_name,
           current: 0,
           best: 0,
-          lastDate: null,
           dates: new Set()
         };
       }
       staffStreaks[record.staff_id].dates.add(record.date);
     });
 
-    // Calculate streaks for each staff
     Object.keys(staffStreaks).forEach(id => {
-      const dates = Array.from(staffStreaks[id].dates).sort().reverse();
+      const datesSet = staffStreaks[id].dates;
+      const sortedDates = Array.from(datesSet).sort().reverse();
       let current = 0;
-      let best = 0;
-      let temp = 0;
-
-      // Current streak check
-      let checkDate = new Date();
-      if (!staffStreaks[id].dates.has(today) && !staffStreaks[id].dates.has(yesterday)) {
-        current = 0;
-      } else {
-        let d = staffStreaks[id].dates.has(today) ? new Date(today) : new Date(yesterday);
-        while (staffStreaks[id].dates.has(d.toISOString().split('T')[0])) {
+      let checkD = datesSet.has(today) ? new Date(today) : (datesSet.has(yesterday) ? new Date(yesterday) : null);
+      
+      if (checkD) {
+        while (datesSet.has(checkD.toISOString().split('T')[0])) {
           current++;
-          d.setDate(d.getDate() - 1);
+          checkD.setDate(checkD.getDate() - 1);
         }
       }
 
-      // Best streak check
+      let best = 0;
+      let temp = 0;
       let lastD = null;
-      dates.reverse().forEach(dateStr => {
+      Array.from(datesSet).sort().forEach(dateStr => {
         const d = new Date(dateStr);
         if (lastD) {
           const diff = (d - lastD) / 86400000;
-          if (diff === 1) {
-            temp++;
-          } else {
-            temp = 1;
-          }
-        } else {
-          temp = 1;
-        }
+          if (diff === 1) temp++;
+          else temp = 1;
+        } else temp = 1;
         best = Math.max(best, temp);
         lastD = d;
       });
@@ -1320,8 +1230,7 @@ async function fetchStreaks() {
       staffStreaks[id].best = best;
     });
 
-    // Update My Stats
-    const myStats = staffStreaks[user.id] || { current: 0, best: 0, dates: new Set() };
+    const myStats = staffStreaks[user.uid] || { current: 0, best: 0, dates: new Set() };
     document.getElementById('my-streak-count').innerText = myStats.current;
     document.getElementById('my-best-streak').innerText = myStats.best;
     document.getElementById('total-days-worked').innerText = myStats.dates.size;
@@ -1330,42 +1239,28 @@ async function fetchStreaks() {
     const consistency = ((myStats.dates.size / daysInMonth) * 100).toFixed(0);
     document.getElementById('consistency-score').innerText = `${consistency}%`;
 
-    // Update Leaderboard
     const leaderboardBody = document.getElementById('streaks-leaderboard-body');
     leaderboardBody.innerHTML = '';
-    
     const sortedStaff = Object.values(staffStreaks).sort((a, b) => b.current - a.current);
-    if (sortedStaff.length > 0) {
-      document.getElementById('top-streak-name').innerText = sortedStaff[0].name;
-    }
+    if (sortedStaff.length > 0) document.getElementById('top-streak-name').innerText = sortedStaff[0].name;
 
     sortedStaff.forEach((staff, index) => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td><span class="font-bold text-slate-500">#${index + 1}</span></td>
-        <td>
+        <td data-label="Rank"><span class="font-bold text-slate-500">#${index + 1}</span></td>
+        <td data-label="Staff">
           <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400 text-xs font-bold">
-              ${staff.name.charAt(0)}
-            </div>
+            <div class="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400 text-xs font-bold">${staff.name.charAt(0)}</div>
             <span>${staff.name}</span>
           </div>
         </td>
-        <td>
-          <div class="flex items-center gap-2">
-            <i class="fas fa-fire text-orange-500"></i>
-            <span class="font-bold">${staff.current} Days</span>
-          </div>
-        </td>
-        <td>${staff.best} Days</td>
-        <td><span class="status-badge ${staff.current > 0 ? 'status-completed' : 'status-pending'}">${staff.current > 0 ? 'Active' : 'Inactive'}</span></td>
+        <td data-label="Current Streak"><div class="flex items-center gap-2"><i class="fas fa-fire text-orange-500"></i><span class="font-bold">${staff.current} Days</span></div></td>
+        <td data-label="Best Streak">${staff.best} Days</td>
+        <td data-label="Status"><span class="status-badge ${staff.current > 0 ? 'status-completed' : 'status-pending'}">${staff.current > 0 ? 'Active' : 'Inactive'}</span></td>
       `;
       leaderboardBody.appendChild(tr);
     });
-
-  } catch (err) {
-    console.error("Error fetching streaks:", err);
-  }
+  } catch (err) { console.error("Error fetching streaks:", err); }
 }
 
 // --- RECOGNITION LOGIC ---
@@ -1380,12 +1275,9 @@ async function fetchRecognition() {
   if (!recognitionView || recognitionView.classList.contains('hidden')) return;
 
   try {
-    const { data, error } = await supabase
-      .from('recognition')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
+    const q = query(collection(db, 'recognition'), orderBy('created_at', 'desc'));
+    const snapshot = await getDocs(q);
+    const data = snapshot.docs.map(doc => doc.data());
 
     recognitionGrid.innerHTML = '';
     if (data.length === 0) {
@@ -1394,12 +1286,11 @@ async function fetchRecognition() {
       data.forEach(item => {
         const card = document.createElement('div');
         card.className = 'glass p-6 relative overflow-hidden group';
+        const date = item.created_at?.toDate() || new Date();
         card.innerHTML = `
           <div class="absolute -right-4 -top-4 w-24 h-24 bg-cyan-500/10 rounded-full blur-2xl group-hover:bg-cyan-500/20 transition-all"></div>
           <div class="flex items-center gap-4 mb-4">
-            <div class="w-12 h-12 rounded-full bg-cyan-500 flex items-center justify-center text-black font-bold text-xl">
-              <i class="fas fa-medal"></i>
-            </div>
+            <div class="w-12 h-12 rounded-full bg-cyan-500 flex items-center justify-center text-black font-bold text-xl"><i class="fas fa-medal"></i></div>
             <div>
               <h4 class="font-bold text-lg">${item.staff_name}</h4>
               <p class="text-xs text-cyan-400 font-bold uppercase tracking-widest">${item.type}</p>
@@ -1407,7 +1298,7 @@ async function fetchRecognition() {
           </div>
           <p class="text-slate-400 text-sm italic mb-4">"${item.message}"</p>
           <div class="flex justify-between items-center pt-4 border-t border-slate-800">
-            <span class="text-[10px] text-slate-500 uppercase font-bold">${new Date(item.created_at).toLocaleDateString()}</span>
+            <span class="text-[10px] text-slate-500 uppercase font-bold">${date.toLocaleDateString()}</span>
             <span class="text-[10px] text-slate-500">By Admin</span>
           </div>
         `;
@@ -1415,23 +1306,15 @@ async function fetchRecognition() {
       });
     }
 
-    // Populate staff dropdown for modal
     if (recognitionStaffSelect) {
-      const { data: staff } = await supabase.from('staff').select('id, name');
-      recognitionStaffSelect.innerHTML = staff.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+      const staffSnap = await getDocs(query(collection(db, 'users'), orderBy('name')));
+      recognitionStaffSelect.innerHTML = staffSnap.docs.map(doc => `<option value="${doc.id}">${doc.data().name}</option>`).join('');
     }
-
-  } catch (err) {
-    console.error("Error fetching recognition:", err);
-  }
+  } catch (err) { console.error("Error fetching recognition:", err); }
 }
 
-if (giveRecognitionBtn) {
-  giveRecognitionBtn.addEventListener('click', () => recognitionModal.classList.remove('hidden'));
-}
-if (closeRecognitionModal) {
-  closeRecognitionModal.addEventListener('click', () => recognitionModal.classList.add('hidden'));
-}
+if (giveRecognitionBtn) giveRecognitionBtn.addEventListener('click', () => recognitionModal.classList.remove('hidden'));
+if (closeRecognitionModal) closeRecognitionModal.addEventListener('click', () => recognitionModal.classList.add('hidden'));
 
 if (recognitionForm) {
   recognitionForm.addEventListener('submit', async (e) => {
@@ -1442,12 +1325,7 @@ if (recognitionForm) {
     const message = document.getElementById('recognition-message').value;
 
     try {
-      const { error } = await supabase
-        .from('recognition')
-        .insert([{ staff_id: staffId, staff_name: staffName, type, message }]);
-
-      if (error) throw error;
-
+      await addDoc(collection(db, 'recognition'), { staff_id: staffId, staff_name: staffName, type, message, created_at: serverTimestamp() });
       showToast('Recognition submitted!', 'success');
       recognitionModal.classList.add('hidden');
       recognitionForm.reset();
@@ -1471,18 +1349,13 @@ async function fetchLeaveRequests() {
   if (!leaveView || leaveView.classList.contains('hidden')) return;
 
   try {
-    const userResponse = await supabase.auth.getUser();
-    const user = userResponse.data.user;
+    const user = auth.currentUser;
     if (!user) return;
 
-    // Fetch My Leave History
-    const { data: myLeaves, error: myError } = await supabase
-      .from('leave_requests')
-      .select('*')
-      .eq('staff_id', user.id)
-      .order('created_at', { ascending: false });
-
-    if (myError) throw myError;
+    // My Leaves
+    const qMy = query(collection(db, 'leave_requests'), where('staff_id', '==', user.uid), orderBy('created_at', 'desc'));
+    const snapshotMy = await getDocs(qMy);
+    const myLeaves = snapshotMy.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
     myLeaveHistoryBody.innerHTML = '';
     let pendingCount = 0;
@@ -1495,17 +1368,15 @@ async function fetchLeaveRequests() {
       const tr = document.createElement('tr');
       const start = new Date(leave.start_date);
       const end = new Date(leave.end_date);
-      const days = Math.ceil((end - start) / 86400000) + 1;
+      const days = Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1;
 
       tr.innerHTML = `
-        <td>${leave.type}</td>
-        <td>${leave.start_date}</td>
-        <td>${leave.end_date}</td>
-        <td>${days} Days</td>
-        <td><span class="status-badge ${leave.status === 'Approved' ? 'status-completed' : leave.status === 'Rejected' ? 'status-cancelled' : 'status-pending'}">${leave.status}</span></td>
-        <td>
-          ${leave.status === 'Pending' ? `<button onclick="cancelLeave('${leave.id}')" class="text-red-400 hover:text-red-500"><i class="fas fa-times"></i></button>` : '--'}
-        </td>
+        <td data-label="Type">${leave.type}</td>
+        <td data-label="Start Date">${leave.start_date}</td>
+        <td data-label="End Date">${leave.end_date}</td>
+        <td data-label="Duration">${days} Days</td>
+        <td data-label="Status"><span class="status-badge ${leave.status === 'Approved' ? 'status-completed' : leave.status === 'Rejected' ? 'status-cancelled' : 'status-pending'}">${leave.status}</span></td>
+        <td data-label="Action">${leave.status === 'Pending' ? `<button onclick="cancelLeave('${leave.id}')" class="text-red-400 hover:text-red-500"><i class="fas fa-times"></i></button>` : '--'}</td>
       `;
       myLeaveHistoryBody.appendChild(tr);
     });
@@ -1513,116 +1384,80 @@ async function fetchLeaveRequests() {
     document.getElementById('pending-leave-count').innerText = pendingCount;
     document.getElementById('approved-leave-count').innerText = approvedCount;
 
-    // Admin View: All Leave Requests
-    const isAdmin = localStorage.getItem('isAdminSession') === 'true';
-    if (isAdmin && adminLeaveRequestsBody) {
-      const { data: allLeaves, error: allError } = await supabase
-        .from('leave_requests')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (allError) throw allError;
-
+    // Admin View
+    const isAdminFlag = localStorage.getItem('isAdminSession') === 'true';
+    if (isAdminFlag && adminLeaveRequestsBody) {
+      const snapshotAll = await getDocs(query(collection(db, 'leave_requests'), orderBy('created_at', 'desc')));
       adminLeaveRequestsBody.innerHTML = '';
-      allLeaves.forEach(leave => {
+      snapshotAll.docs.forEach(docSnap => {
+        const leave = docSnap.data();
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td>${leave.staff_name}</td>
-          <td>${leave.type}</td>
-          <td>${leave.start_date} to ${leave.end_date}</td>
-          <td class="max-w-xs truncate">${leave.reason}</td>
-          <td><span class="status-badge ${leave.status === 'Approved' ? 'status-completed' : leave.status === 'Rejected' ? 'status-cancelled' : 'status-pending'}">${leave.status}</span></td>
-          <td>
+          <td data-label="Staff Name">${leave.staff_name}</td>
+          <td data-label="Type">${leave.type}</td>
+          <td data-label="Dates">${leave.start_date} to ${leave.end_date}</td>
+          <td data-label="Reason" class="max-w-xs truncate">${leave.reason}</td>
+          <td data-label="Status"><span class="status-badge ${leave.status === 'Approved' ? 'status-completed' : leave.status === 'Rejected' ? 'status-cancelled' : 'status-pending'}">${leave.status}</span></td>
+          <td data-label="Action">
             ${leave.status === 'Pending' ? `
-              <button onclick="updateLeaveStatus('${leave.id}', 'Approved')" class="text-emerald-400 hover:text-emerald-500 mr-2"><i class="fas fa-check"></i></button>
-              <button onclick="updateLeaveStatus('${leave.id}', 'Rejected')" class="text-red-400 hover:text-red-500"><i class="fas fa-times"></i></button>
+              <button onclick="updateLeaveStatus('${docSnap.id}', 'Approved')" class="text-emerald-400 hover:text-emerald-500 mr-2"><i class="fas fa-check"></i></button>
+              <button onclick="updateLeaveStatus('${docSnap.id}', 'Rejected')" class="text-red-400 hover:text-red-500"><i class="fas fa-times"></i></button>
             ` : '--'}
           </td>
         `;
         adminLeaveRequestsBody.appendChild(tr);
       });
     }
-
-  } catch (err) {
-    console.error("Error fetching leave requests:", err);
-  }
+  } catch (err) { console.error("Error fetching leave requests:", err); }
 }
 
-if (applyLeaveBtn) {
-  applyLeaveBtn.addEventListener('click', () => leaveModal.classList.remove('hidden'));
-}
-if (closeLeaveModal) {
-  closeLeaveModal.addEventListener('click', () => leaveModal.classList.add('hidden'));
-}
+if (applyLeaveBtn) applyLeaveBtn.addEventListener('click', () => leaveModal.classList.remove('hidden'));
+if (closeLeaveModal) closeLeaveModal.addEventListener('click', () => leaveModal.classList.add('hidden'));
 
 if (leaveForm) {
   leaveForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const userResponse = await supabase.auth.getUser();
-    const user = userResponse.data.user;
+    const user = auth.currentUser;
+    if (!user) return;
     
-    const type = document.getElementById('leave-type').value;
-    const startDate = document.getElementById('leave-start-date').value;
-    const endDate = document.getElementById('leave-end-date').value;
-    const reason = document.getElementById('leave-reason').value;
-
     try {
-      const { error } = await supabase
-        .from('leave_requests')
-        .insert([{
-          staff_id: user.id,
-          staff_name: user.user_metadata?.full_name || user.email.split('@')[0],
-          type,
-          start_date: startDate,
-          end_date: endDate,
-          reason,
-          status: 'Pending'
-        }]);
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const staffName = userDoc.exists() ? userDoc.data().name : (user.displayName || user.email.split('@')[0]);
 
-      if (error) throw error;
+      await addDoc(collection(db, 'leave_requests'), {
+        staff_id: user.uid,
+        staff_name: staffName,
+        type: document.getElementById('leave-type').value,
+        start_date: document.getElementById('leave-start-date').value,
+        end_date: document.getElementById('leave-end-date').value,
+        reason: document.getElementById('leave-reason').value,
+        status: 'Pending',
+        created_at: serverTimestamp()
+      });
 
       showToast('Leave request submitted successfully!', 'success');
-      if (leaveModal) leaveModal.classList.add('hidden');
+      leaveModal.classList.add('hidden');
       leaveForm.reset();
       fetchLeaveRequests();
-    } catch (err) {
-      console.error("Error submitting leave:", err);
-      showToast('Failed to submit leave request. Ensure the database table exists.', 'error');
-    }
+    } catch (err) { console.error("Error submitting leave:", err); showToast('Failed to submit leave request.', 'error'); }
   });
 }
 
 window.updateLeaveStatus = async (id, status) => {
   try {
-    const { error } = await supabase
-      .from('leave_requests')
-      .update({ status })
-      .eq('id', id);
-
-    if (error) throw error;
+    await updateDoc(doc(db, 'leave_requests', id), { status });
     showToast(`Leave request ${status.toLowerCase()}!`, 'success');
     fetchLeaveRequests();
-  } catch (err) {
-    console.error("Error updating leave status:", err);
-    showToast('Failed to update status', 'error');
-  }
+  } catch (err) { console.error("Error updating leave status:", err); showToast('Failed to update status', 'error'); }
 };
 
 window.cancelLeave = async (id) => {
   if (!confirm('Are you sure you want to cancel this request?')) return;
   try {
-    const { error } = await supabase
-      .from('leave_requests')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
+    await deleteDoc(doc(db, 'leave_requests', id));
     showToast('Request cancelled', 'success');
     fetchLeaveRequests();
-  } catch (err) {
-    console.error("Error cancelling leave:", err);
-    showToast('Failed to cancel request', 'error');
-  }
+  } catch (err) { console.error("Error cancelling leave:", err); showToast('Failed to cancel request', 'error'); }
 };
 
 // --- MEDIA STORAGE LOGIC ---
@@ -1633,12 +1468,9 @@ async function fetchMedia() {
   if (!mediaGrid) return;
   
   try {
-    const { data, error } = await supabase
-      .from('media')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
+    const q = query(collection(db, 'media'), orderBy('created_at', 'desc'));
+    const snapshot = await getDocs(q);
+    const data = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
     mediaGrid.innerHTML = '';
     if (data.length === 0) {
@@ -1687,32 +1519,17 @@ if (fileUpload) {
       const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
       const filePath = `uploads/${fileName}`;
 
-      // 1. Upload to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('media')
-        .upload(filePath, file);
+      // Firebase Migration Note: Actual file storage requires Firebase Storage setup.
+      // We will save the metadata to Firestore for now.
+      await addDoc(collection(db, 'media'), {
+        name: file.name,
+        url: URL.createObjectURL(file), // Local preview or placeholder
+        type: file.type,
+        size: file.size,
+        created_at: serverTimestamp()
+      });
 
-      if (uploadError) throw uploadError;
-
-      // 2. Get Public URL
-      const { data: urlData } = supabase.storage
-        .from('media')
-        .getPublicUrl(filePath);
-
-      // 3. Save metadata to database
-      const { error: dbError } = await supabase
-        .from('media')
-        .insert([{
-          name: file.name,
-          url: urlData.publicUrl,
-          type: file.type,
-          size: file.size,
-          created_at: new Date().toISOString()
-        }]);
-
-      if (dbError) throw dbError;
-
-      uploadBtn.innerHTML = '<i class="fas fa-check mr-2"></i> Uploaded!';
+      uploadBtn.innerHTML = '<i class="fas fa-check mr-2"></i> Metadata Saved!';
       uploadBtn.style.background = '#10b981';
       fetchMedia();
       
@@ -1723,6 +1540,7 @@ if (fileUpload) {
       }, 2000);
     } catch (err) {
       console.error("Upload failed:", err);
+      showToast("Metadata save failed.", "error");
       uploadBtn.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i> Failed';
       uploadBtn.style.background = '#ef4444';
       setTimeout(() => {
@@ -1738,99 +1556,15 @@ window.deleteMedia = async (id, name) => {
   if (!confirm(`Are you sure you want to delete ${name}?`)) return;
   
   try {
-    const { error } = await supabase
-      .from('media')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
+    await deleteDoc(doc(db, 'media', id));
     fetchMedia();
   } catch (err) {
     console.error("Delete failed:", err);
+    showToast("Delete failed", "error");
   }
 };
 
-// --- REAL-TIME SYNC LOGIC ---
-function setupRealtimeSubscriptions() {
-  const typingIndicator = document.getElementById('typing-indicator');
-  const typingText = document.getElementById('typing-text');
-
-  // Sync Chat
-  chatChannel = supabase.channel('public:messages')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, async payload => {
-      const userRes = await supabase.auth.getUser();
-      const user = userRes.data.user;
-      if (!user) return;
-      
-      const currentMyId = user.id;
-      const msg = payload.new;
-
-      // Handle Read Receipt Updates
-      if (payload.eventType === 'UPDATE') {
-        if (msg.sender_id === currentMyId && msg.recipient_id === activeRecipient) {
-          fetchChatMessages();
-        }
-        return;
-      }
-
-      // Handle New Messages
-      if (payload.eventType === 'INSERT') {
-        const msg = payload.new;
-        const meId = user.id;
-
-        const isGlobal = activeRecipient === 'global' && !msg.recipient_id;
-        const isPrivate = (activeRecipient === msg.sender_id && msg.recipient_id === meId) || 
-                          (activeRecipient === msg.recipient_id && msg.sender_id === meId);
-
-        if (chatView && !chatView.classList.contains('hidden') && (isGlobal || isPrivate)) {
-          fetchChatMessages();
-        }
-        
-        const forMe = msg.recipient_id === meId || (!msg.recipient_id && meId !== msg.sender_id);
-        const notLooking = chatView.classList.contains('hidden') || !isPrivate && !isGlobal;
-
-        if (forMe && notLooking) {
-          addNotification('New Message', `${msg.sender_name}: ${msg.content.substring(0, 30)}...`, 'Chat');
-        }
-      }
-    })
-    .on('broadcast', { event: 'typing' }, payload => {
-      if (activeRecipient === payload.payload.senderId && payload.payload.recipientId === myId) {
-        if (typingIndicator && typingText) {
-          typingText.innerText = `${payload.payload.senderName} is typing...`;
-          typingIndicator.classList.remove('hidden');
-          
-          clearTimeout(window.typingTimer);
-          window.typingTimer = setTimeout(() => {
-            typingIndicator.classList.add('hidden');
-          }, 3000);
-        }
-      }
-    })
-    .subscribe();
-
-  // Sync Announcements
-  supabase
-    .channel('public:announcements')
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'announcements' }, payload => {
-      if (announcementsView && !announcementsView.classList.contains('hidden')) {
-        fetchAnnouncements();
-      }
-      addNotification('New Announcement', payload.new.title, 'Announcement');
-    })
-    .subscribe();
-
-  // Sync Dashboard Stats (Bookings)
-  supabase
-    .channel('public:bookings')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
-      if (document.body.classList.contains('is-admin')) fetchDashboardStats();
-    })
-    .subscribe();
-}
-
-// Initialize real-time
-setupRealtimeSubscriptions();
+// Real-time sync is now handled via onSnapshot in specific feature logic.
 
 const staffTableBody = document.getElementById('staff-table-body');
 
@@ -1838,25 +1572,30 @@ async function fetchStaff() {
   if (!staffTableBody) return;
   
   try {
-    const { data: staffList, error } = await supabase
-      .from('staff')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const q = query(collection(db, 'users'), orderBy('created_at', 'desc'));
+    const snapshot = await getDocs(q);
+    const staffList = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
-    if (error) throw error;
-    
     staffTableBody.innerHTML = '';
     
+    if (staffList.length === 0) {
+      staffTableBody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-slate-500">No staff members found.</td></tr>';
+      return;
+    }
+
     staffList.forEach((staff) => {
+      // In staff management, let's show everyone including the current admin
+      // This helps verify roles and status
       const tr = document.createElement('tr');
+      tr.className = "hover:bg-white/5 transition-colors";
       tr.innerHTML = `
-        <td><div class="font-bold">${staff.name}</div></td>
-        <td>${staff.email}</td>
-        <td>${staff.role}</td>
-        <td><span class="status-badge status-completed">${staff.status}</span></td>
-        <td>
-          <button onclick="deleteStaff('${staff.id}')" class="text-slate-400 hover:text-red-400 transition-colors">
-            <i class="fas fa-trash"></i>
+        <td data-label="Name" class="px-6 py-4"><div class="font-bold text-white">${staff.name || 'No Name'}</div></td>
+        <td data-label="Email" class="px-6 py-4 text-slate-400">${staff.email}</td>
+        <td data-label="Role" class="px-6 py-4 text-cyan-400 font-medium">${staff.role || 'Staff'}</td>
+        <td data-label="Status" class="px-6 py-4"><span class="status-badge status-completed">${staff.status || 'Active'}</span></td>
+        <td data-label="Action" class="px-6 py-4">
+          <button onclick="deleteStaff('${staff.id}')" class="text-slate-500 hover:text-red-500 transition-colors p-2" title="Delete Staff">
+            <i class="fas fa-trash-alt"></i>
           </button>
         </td>
       `;
@@ -1864,6 +1603,7 @@ async function fetchStaff() {
     });
   } catch (error) {
     console.error("Error fetching staff:", error);
+    staffTableBody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-red-500">Error loading staff list.</td></tr>`;
   }
 }
 
@@ -1873,20 +1613,21 @@ async function fetchStaffForDropdown() {
   if (!assigneeSelect) return;
 
   try {
-    const { data: staff, error } = await supabase
-      .from('staff')
-      .select('id, name')
-      .eq('status', 'Active');
+    const q = query(collection(db, 'users'), orderBy('name'));
+    const snapshot = await getDocs(q);
+    const staff = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
-    if (error) throw error;
-
-    assigneeSelect.innerHTML = '<option value="">Select Staff</option>';
-    staff.forEach(s => {
-      const option = document.createElement('option');
-      option.value = s.id;
-      option.innerText = s.name;
-      assigneeSelect.appendChild(option);
-    });
+    assigneeSelect.innerHTML = '<option value="">Select Staff Member</option>';
+    if (staff && staff.length > 0) {
+      staff.forEach(s => {
+        const option = document.createElement('option');
+        option.value = s.id;
+        option.textContent = s.name;
+        assigneeSelect.appendChild(option);
+      });
+    } else {
+      assigneeSelect.innerHTML = '<option value="">No staff found in database</option>';
+    }
   } catch (error) {
     console.error("Error fetching staff for dropdown:", error);
   }
@@ -1899,17 +1640,17 @@ if (assignTaskForm) {
     const submitBtn = assignTaskForm.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerText;
 
-    submitBtn.innerText = 'Assigning...';
-    submitBtn.disabled = true;
+    const assigneeId = document.getElementById('task-assignee').value;
+    
+    if (!assigneeId || assigneeId === "") {
+      showToast('Please select a staff member from the dropdown list.', 'warning');
+      return;
+    }
+
+    setLoading(submitBtn, true, 'Assigning...');
 
     try {
-      const assigneeId = document.getElementById('task-assignee').value;
-      if (!assigneeId) {
-        showToast('Please select a staff member to assign the task to.', 'warning');
-        setLoading(submitBtn, false, originalText);
-        return;
-      }
-
+      const user = auth.currentUser;
       const taskData = {
         title: document.getElementById('task-title').value,
         assignee_id: assigneeId,
@@ -1919,14 +1660,11 @@ if (assignTaskForm) {
         description: document.getElementById('task-description').value,
         reminders: document.getElementById('task-reminders')?.checked || false,
         status: 'pending',
-        created_at: new Date().toISOString()
+        created_at: serverTimestamp(),
+        created_by: user?.uid || 'Admin'
       };
 
-      const { error } = await supabase
-        .from('tasks')
-        .insert([taskData]);
-
-      if (error) throw error;
+      await addDoc(collection(db, 'tasks'), taskData);
 
       showToast('Task assigned successfully!', 'success');
       assignTaskForm.reset();
@@ -1953,30 +1691,17 @@ async function fetchMyTasks() {
   const filterValue = statusFilter ? statusFilter.value : 'all';
 
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = auth.currentUser;
     if (!user) return;
 
-    // Get staff ID first
-    const { data: staffMember } = await supabase
-      .from('staff')
-      .select('id')
-      .eq('email', user.email)
-      .single();
-
-    if (!staffMember) return;
-
-    let query = supabase
-      .from('tasks')
-      .select('*')
-      .eq('assignee_id', staffMember.id);
+    let q = query(collection(db, 'tasks'), where('assignee_id', '==', user.uid), orderBy('due_date', 'asc'));
 
     if (filterValue !== 'all') {
-      query = query.eq('status', filterValue);
+      q = query(collection(db, 'tasks'), where('assignee_id', '==', user.uid), where('status', '==', filterValue), orderBy('due_date', 'asc'));
     }
 
-    const { data: tasks, error } = await query.order('due_date', { ascending: true });
-
-    if (error) throw error;
+    const snapshot = await getDocs(q);
+    const tasks = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
     taskTableBody.innerHTML = '';
     if (taskCountBadge) taskCountBadge.innerText = tasks.filter(t => t.status !== 'completed').length;
@@ -1996,21 +1721,22 @@ async function fetchMyTasks() {
         if (e.target.tagName !== 'SELECT') showTaskDetails(task.id);
       };
       const priorityClass = `priority-${task.priority.toLowerCase()}`;
+      const dueDate = task.due_date ? new Date(task.due_date) : new Date();
       dueDate.setHours(0, 0, 0, 0);
       const isOverdue = dueDate < today && task.status !== 'completed';
       
       if (isOverdue) tr.classList.add('overdue-row');
 
       tr.innerHTML = `
-        <td>
+        <td data-label="Title">
           <div class="font-bold">${task.title}</div>
           ${isOverdue ? '<span class="overdue-badge"><i class="fas fa-exclamation-triangle mr-1"></i> Overdue</span>' : ''}
         </td>
-        <td>${task.category}</td>
-        <td><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
-        <td class="${isOverdue ? 'text-red-500 font-bold' : ''}">${task.due_date}</td>
-        <td><span class="status-badge status-${task.status.toLowerCase().replace(' ', '-')}">${task.status}</span></td>
-        <td>
+        <td data-label="Category">${task.category}</td>
+        <td data-label="Priority"><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
+        <td data-label="Due Date" class="${isOverdue ? 'text-red-500 font-bold' : ''}">${task.due_date}</td>
+        <td data-label="Status"><span class="status-badge status-${task.status.toLowerCase().replace(' ', '-')}">${task.status}</span></td>
+        <td data-label="Action">
           <select onchange="updateTaskStatus('${task.id}', this.value)" class="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs">
             <option value="pending" ${task.status === 'pending' ? 'selected' : ''}>Pending</option>
             <option value="in-progress" ${task.status === 'in-progress' ? 'selected' : ''}>In Progress</option>
@@ -2050,26 +1776,22 @@ window.updateTaskStatus = async (id, newStatus) => {
   try {
     const updateData = { status: newStatus };
     if (newStatus === 'completed') {
-      updateData.completion_date = new Date().toISOString();
+      updateData.completion_date = serverTimestamp();
     } else {
       updateData.completion_date = null;
     }
 
-    const { error } = await supabase
-      .from('tasks')
-      .update(updateData)
-      .eq('id', id);
-
-    if (error) throw error;
+    await updateDoc(doc(db, 'tasks', id), updateData);
     fetchMyTasks();
+    showToast('Task updated!', 'success');
   } catch (error) {
     console.error("Error updating task status:", error);
+    showToast('Update failed', 'error');
   }
 };
 
 async function fetchStaffDashboardStats() {
-  const userResponse = await supabase.auth.getUser();
-  const user = userResponse.data.user;
+  const user = auth.currentUser;
   if (!user) return;
 
   const completedTasksEl = document.getElementById('staff-completed-tasks-stat');
@@ -2080,21 +1802,14 @@ async function fetchStaffDashboardStats() {
   
   try {
     // Fetch user's tasks
-    const { data: tasks, error: tasksError } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('assignee_id', user.id)
-      .order('due_date', { ascending: true });
-    
-    if (tasksError) throw tasksError;
+    const tasksQ = query(collection(db, 'tasks'), where('assignee_id', '==', user.uid), orderBy('due_date', 'asc'));
+    const tasksSnapshot = await getDocs(tasksQ);
+    const tasks = tasksSnapshot.docs.map(docSnap => docSnap.data());
 
     // Fetch user's attendance
-    const { data: attendance, error: attendanceError } = await supabase
-      .from('attendance')
-      .select('*')
-      .eq('staff_id', user.id);
-    
-    if (attendanceError) throw attendanceError;
+    const attendanceQ = query(collection(db, 'attendance'), where('staff_id', '==', user.uid));
+    const attendanceSnapshot = await getDocs(attendanceQ);
+    const attendance = attendanceSnapshot.docs.map(docSnap => docSnap.data());
 
     const completedTasks = tasks ? tasks.filter(t => t.status === 'completed').length : 0;
     const pendingTasksCount = tasks ? tasks.filter(t => t.status !== 'completed').length : 0;
@@ -2176,15 +1891,12 @@ async function fetchStaffDashboardStats() {
 window.deleteStaff = async (id) => {
   if (confirm('Are you sure you want to delete this staff member?')) {
     try {
-      const { error } = await supabase
-        .from('staff')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await deleteDoc(doc(db, 'users', id));
       fetchStaff();
+      showToast('Staff removed', 'success');
     } catch (error) {
       console.error("Error deleting staff:", error);
+      showToast('Action failed', 'error');
     }
   }
 };
@@ -2209,42 +1921,26 @@ async function fetchDashboardStats() {
   
   try {
     // Fetch Bookings
-    const { data: bookings, error: bookingsError } = await supabase
-      .from('bookings')
-      .select('*');
+    const bookingsSnapshot = await getDocs(collection(db, 'bookings'));
+    const bookings = bookingsSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
-    if (bookingsError) throw bookingsError;
-
-    // Fetch Messages (for new messages count)
-    const { data: messages, error: messagesError } = await supabase
-      .from('contact_messages')
-      .select('*', { count: 'exact' })
-      .eq('read', false);
-
-    if (messagesError) throw messagesError;
+    // Fetch Messages (Inquiries)
+    const inquiriesQ = query(collection(db, 'inquiries'), where('status', '==', 'new'));
+    const inquiriesSnapshot = await getDocs(inquiriesQ);
+    const messages = inquiriesSnapshot.docs.map(docSnap => docSnap.data());
 
     // Fetch Staff & Attendance (for team attendance)
-    const { data: staff, error: staffError } = await supabase
-      .from('staff')
-      .select('id');
+    const staffSnapshot = await getDocs(collection(db, 'users'));
+    const staff = staffSnapshot.docs.filter(docSnap => docSnap.data().role !== 'Client');
     
-    if (staffError) throw staffError;
-
     const today = new Date().toISOString().split('T')[0];
-    const { data: attendance, error: attendanceError } = await supabase
-      .from('attendance')
-      .select('*')
-      .eq('date', today);
-    
-    if (attendanceError) throw attendanceError;
+    const attendanceQ = query(collection(db, 'attendance'), where('date', '==', today));
+    const attendanceSnapshot = await getDocs(attendanceQ);
+    const attendance = attendanceSnapshot.docs.map(docSnap => docSnap.data());
 
     // Fetch Tasks (for pending tasks)
-    const { data: tasks, error: tasksError } = await supabase
-      .from('tasks')
-      .select('*')
-      .neq('status', 'completed');
-    
-    if (tasksError) throw tasksError;
+    const tasksSnapshot = await getDocs(collection(db, 'tasks'));
+    const tasks = tasksSnapshot.docs.map(docSnap => docSnap.data()).filter(t => t.status !== 'completed');
 
     // Update Stats
     const defaultPrice = parseInt(localStorage.getItem('defaultBookingPrice') || '500');
@@ -2258,13 +1954,18 @@ async function fetchDashboardStats() {
     if (totalRevenueStat) totalRevenueStat.innerText = currencyManager.format(totalRevenue);
     if (activeBookingsStat) activeBookingsStat.innerText = activeBookings;
     if (pendingBookingsStat) pendingBookingsStat.innerText = `${pendingCount} pending confirmation`;
-    if (newMessagesStat) newMessagesStat.innerText = messages ? messages.length : 0;
-    if (teamAttendanceStat) teamAttendanceStat.innerText = `${attendance ? attendance.length : 0}/${staff ? staff.length : 0}`;
-    if (pendingTasksStat) pendingTasksStat.innerText = tasks ? tasks.length : 0;
+    if (newMessagesStat) newMessagesStat.innerText = messages.length;
+    if (teamAttendanceStat) teamAttendanceStat.innerText = `${attendance.length}/${staff.length}`;
+    if (pendingTasksStat) pendingTasksStat.innerText = tasks.length;
 
     // Update Recent Bookings
     if (recentBookingsBody) {
-      const recent = bookings.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5);
+      const recent = bookings.sort((a, b) => {
+        const dateA = a.created_at?.toDate ? a.created_at.toDate() : new Date(a.created_at);
+        const dateB = b.created_at?.toDate ? b.created_at.toDate() : new Date(b.created_at);
+        return dateB - dateA;
+      }).slice(0, 5);
+      
       recentBookingsBody.innerHTML = '';
       if (recent.length === 0) {
         recentBookingsBody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-slate-500">No recent bookings</td></tr>';
@@ -2302,10 +2003,9 @@ async function fetchBookings() {
   bookingsTableBody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-slate-500">Loading bookings...</td></tr>';
 
   try {
-    let query = supabase
-      .from('bookings')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const q = query(collection(db, 'bookings'), orderBy('created_at', 'desc'));
+    const snapshot = await getDocs(q);
+    let bookings = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
     // Apply Filters
     const status = filterStatus.value;
@@ -2314,25 +2014,22 @@ async function fetchBookings() {
     const dateTo = filterDateTo.value;
 
     if (status !== 'all') {
-      query = query.eq('status', status);
+      bookings = bookings.filter(b => b.status === status);
     }
     if (service !== 'all') {
-      query = query.eq('service', service);
+      bookings = bookings.filter(b => b.service === service);
     }
     if (dateFrom) {
-      query = query.gte('date', dateFrom);
+      bookings = bookings.filter(b => b.date >= dateFrom);
     }
     if (dateTo) {
-      query = query.lte('date', dateTo);
+      bookings = bookings.filter(b => b.date <= dateTo);
     }
-
-    const { data: bookings, error } = await query;
-    if (error) throw error;
 
     renderBookings(bookings);
   } catch (error) {
     console.error("Error fetching bookings:", error);
-    bookingsTableBody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-red-400">Error loading bookings. Check permissions.</td></tr>';
+    bookingsTableBody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-red-400">Error loading bookings.</td></tr>';
   }
 }
 
@@ -2353,29 +2050,33 @@ function renderBookings(bookings) {
     const isAdminSession = localStorage.getItem('isAdminSession') === 'true';
     
     tr.innerHTML = `
-      <td>#${booking.id.substring(0, 6).toUpperCase()}</td>
-      <td>
-        <div class="font-bold">${booking.client_name}</div>
+      <td data-label="ID">#${booking.id.substring(0, 6).toUpperCase()}</td>
+      <td data-label="Client">
+        <div class="font-bold text-white">${booking.client_name}</div>
         <div class="text-xs text-slate-400">${booking.email}</div>
       </td>
-      <td>${booking.service}</td>
-      <td>${booking.date}</td>
-      <td>${booking.time}</td>
-      <td>
+      <td data-label="Service">${booking.service}</td>
+      <td data-label="Date">${booking.date}</td>
+      <td data-label="Time">${booking.time}</td>
+      <td data-label="Price">
         ${isAdminSession ? `
           <input type="number" 
-            class="w-20 bg-slate-900/50 border border-slate-800 rounded px-2 py-1 text-xs focus:border-cyan-500 outline-none" 
+            class="w-20 bg-slate-900/50 border border-slate-800 rounded px-2 py-1 text-xs focus:border-cyan-500 outline-none text-white" 
             value="${booking.price || ''}" 
             placeholder="500"
             onchange="updatePrice('${booking.id}', this.value)">
         ` : `
-          <span>${currencyManager.format(booking.price || 500)}</span>
+          <span class="text-white">${currencyManager.format(booking.price || 500)}</span>
         `}
       </td>
-      <td><span class="status-badge ${statusClass}">${booking.status}</span></td>
-      <td>
-        <button class="text-slate-400 hover:text-cyan-400 transition-colors mr-3" onclick="updateStatus('${booking.id}', 'Confirmed')"><i class="fas fa-check"></i></button>
-        <button class="text-slate-400 hover:text-red-400 transition-colors" onclick="deleteBooking('${booking.id}')"><i class="fas fa-trash"></i></button>
+      <td data-label="Status"><span class="status-badge ${statusClass}">${booking.status}</span></td>
+      <td data-label="Action">
+        <button class="text-slate-400 hover:text-cyan-400 transition-colors mr-3" onclick="updateStatus('${booking.id}', 'Confirmed')" title="Confirm">
+          <i class="fas fa-check"></i>
+        </button>
+        <button class="text-slate-400 hover:text-red-400 transition-colors" onclick="deleteBooking('${booking.id}')" title="Delete">
+          <i class="fas fa-trash-alt"></i>
+        </button>
       </td>
     `;
     bookingsTableBody.appendChild(tr);
@@ -2386,8 +2087,7 @@ function renderBookings(bookings) {
 
 // Global functions for inline onclick
 window.updatePrice = async (id, newPrice) => {
-  const userResponse = await supabase.auth.getUser();
-  const user = userResponse.data.user;
+  const user = auth.currentUser;
   const isUserAdmin = await isAdmin(user);
   
   if (!isUserAdmin) {
@@ -2396,12 +2096,7 @@ window.updatePrice = async (id, newPrice) => {
   }
 
   try {
-    const { error } = await supabase
-      .from('bookings')
-      .update({ price: parseInt(newPrice) })
-      .eq('id', id);
-
-    if (error) throw error;
+    await updateDoc(doc(db, 'bookings', id), { price: parseInt(newPrice) });
     showToast('Price updated!', 'success');
     fetchDashboardStats();
   } catch (err) {
@@ -2439,29 +2134,19 @@ if (profileSettingsForm) {
     setLoading(submitBtn, true);
     
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
+      const user = auth.currentUser;
+      if (!user) throw new Error("Not logged in");
       
-      // 1. Update Auth metadata
-      const { error: authError } = await supabase.auth.updateUser({
-        data: { 
-          full_name: newName,
-          username: newUsername
-        }
+      // 1. Update Auth profile
+      await updateProfile(user, {
+        displayName: newName
       });
       
-      if (authError) throw authError;
-      
-      // 2. Update staff table
-      const { error: staffError } = await supabase
-        .from('staff')
-        .update({ 
-          name: newName,
-          username: newUsername
-        })
-        .eq('email', user.email);
-        
-      if (staffError) throw staffError;
+      // 2. Update users collection
+      await updateDoc(doc(db, 'users', user.uid), {
+        name: newName,
+        username: newUsername
+      });
       
       showToast('Profile updated successfully!', 'success');
       
@@ -2474,7 +2159,6 @@ if (profileSettingsForm) {
       if (headerName) headerName.innerText = newName;
       if (sidebarName) sidebarName.innerText = newName;
       
-      // Update browser tab if looking at a user's page (might not be needed)
     } catch (err) {
       console.error("Profile update failed:", err);
       showToast(`Error: ${err.message}`, 'error');
@@ -2557,12 +2241,7 @@ if (changePasswordForm) {
     setLoading(submitBtn, true);
     
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
-      });
-      
-      if (error) throw error;
-      
+      await updatePassword(auth.currentUser, newPassword);
       showToast('Password updated successfully!', 'success');
       changePasswordForm.reset();
     } catch (err) {
@@ -2576,30 +2255,24 @@ if (changePasswordForm) {
 
 window.updateStatus = async (id, newStatus) => {
   try {
-    const { error } = await supabase
-      .from('bookings')
-      .update({ status: newStatus })
-      .eq('id', id);
-
-    if (error) throw error;
+    await updateDoc(doc(db, 'bookings', id), { status: newStatus });
     fetchBookings();
+    showToast(`Booking ${newStatus}`, 'success');
   } catch (error) {
     console.error("Error updating status:", error);
+    showToast('Failed to update status', 'error');
   }
 };
 
 window.deleteBooking = async (id) => {
   if (confirm('Are you sure you want to delete this booking?')) {
     try {
-      const { error } = await supabase
-        .from('bookings')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await deleteDoc(doc(db, 'bookings', id));
       fetchBookings();
+      showToast('Booking deleted', 'success');
     } catch (error) {
       console.error("Error deleting booking:", error);
+      showToast('Delete failed', 'error');
     }
   }
 };
@@ -2613,12 +2286,9 @@ async function fetchMessages() {
   if (!messageList) return;
   
   try {
-    const { data, error } = await supabase
-      .from('contact_messages')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
+    const q = query(collection(db, 'inquiries'), orderBy('created_at', 'desc'));
+    const snapshot = await getDocs(q);
+    const data = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
     messageList.innerHTML = '';
     if (data.length === 0) {
@@ -2626,11 +2296,12 @@ async function fetchMessages() {
     } else {
       data.forEach(msg => {
         const div = document.createElement('div');
-        div.className = `p-4 rounded-xl border ${msg.read ? 'bg-white/5 border-white/10' : 'bg-cyan-500/5 border-cyan-500/20'} cursor-pointer hover:bg-white/10 transition-all`;
+        const createdAt = msg.created_at?.toDate ? msg.created_at.toDate() : new Date(msg.created_at || Date.now());
+        div.className = `p-4 rounded-xl border ${msg.status !== 'new' ? 'bg-white/5 border-white/10' : 'bg-cyan-500/5 border-cyan-500/20'} cursor-pointer hover:bg-white/10 transition-all`;
         div.innerHTML = `
           <div class="flex justify-between items-start mb-2">
             <h4 class="font-bold text-sm truncate">${msg.name}</h4>
-            <span class="text-[10px] text-slate-500">${new Date(msg.created_at).toLocaleDateString()}</span>
+            <span class="text-[10px] text-slate-500">${createdAt.toLocaleDateString()}</span>
           </div>
           <p class="text-xs text-slate-400 font-semibold truncate mb-1">${msg.subject}</p>
           <p class="text-[10px] text-slate-500 truncate">${msg.message}</p>
@@ -2650,6 +2321,8 @@ function showMessageDetail(msg) {
   messageDetailEmpty.classList.add('hidden');
   messageDetail.classList.remove('hidden');
   
+  const createdAt = msg.created_at?.toDate ? msg.created_at.toDate() : new Date(msg.created_at || Date.now());
+
   messageDetail.innerHTML = `
     <div class="flex justify-between items-start mb-8">
       <div>
@@ -2657,7 +2330,7 @@ function showMessageDetail(msg) {
         <p class="text-slate-400 text-sm">From: <span class="text-white font-semibold">${msg.name}</span> (${msg.email})</p>
       </div>
       <div class="text-right">
-        <p class="text-slate-400 text-xs">${new Date(msg.created_at).toLocaleString()}</p>
+        <p class="text-slate-400 text-xs">${createdAt.toLocaleString()}</p>
       </div>
     </div>
     <div class="bg-white/5 p-6 rounded-xl border border-white/10 mb-8">
@@ -2674,14 +2347,14 @@ function showMessageDetail(msg) {
   `;
   
   // Mark as read
-  if (!msg.read) {
+  if (msg.status === 'new') {
     markMessageAsRead(msg.id);
   }
 }
 
 async function markMessageAsRead(id) {
   try {
-    await supabase.from('contact_messages').update({ read: true }).eq('id', id);
+    await updateDoc(doc(db, 'inquiries', id), { status: 'read' });
     fetchMessages();
     fetchDashboardStats();
   } catch (err) {
@@ -2692,7 +2365,7 @@ async function markMessageAsRead(id) {
 window.deleteMessage = async (id) => {
   if (confirm('Are you sure you want to delete this message?')) {
     try {
-      await supabase.from('contact_messages').delete().eq('id', id);
+      await deleteDoc(doc(db, 'inquiries', id));
       messageDetail.classList.add('hidden');
       messageDetailEmpty.classList.remove('hidden');
       fetchMessages();
@@ -2720,25 +2393,15 @@ if (contactForm) {
     submitBtn.disabled = true;
 
     try {
-      // 1. Try to save to Supabase
-      const isSupabaseConfigured = import.meta.env.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder');
-      
-      if (isSupabaseConfigured) {
-        const { error } = await supabase
-          .from('contact_messages')
-          .insert([{
-            name,
-            email,
-            subject,
-            message,
-            read: false,
-            created_at: new Date().toISOString()
-          }]);
-
-        if (error) {
-          console.error("Supabase insert error:", error);
-        }
-      }
+      // 1. Save to Firebase (Inquiries)
+      await addDoc(collection(db, 'inquiries'), {
+        name,
+        email,
+        subject,
+        message,
+        status: 'new',
+        created_at: serverTimestamp()
+      });
 
       // 2. Send Email Notification
       try {
@@ -2792,20 +2455,14 @@ async function fetchAttendance() {
   if (!attendanceView || attendanceView.classList.contains('hidden')) return;
 
   try {
-    const userResponse = await supabase.auth.getUser();
-    const user = userResponse.data.user;
+    const user = auth.currentUser;
     if (!user) return;
 
     // Fetch user's attendance for today
     const today = new Date().toISOString().split('T')[0];
-    const { data: todayAttendance, error: todayError } = await supabase
-      .from('attendance')
-      .select('*')
-      .eq('staff_id', user.id)
-      .eq('date', today)
-      .maybeSingle();
-
-    if (todayError) throw todayError;
+    const qToday = query(collection(db, 'attendance'), where('staff_id', '==', user.uid), where('date', '==', today), limit(1));
+    const todaySnapshot = await getDocs(qToday);
+    const todayAttendance = todaySnapshot.empty ? null : todaySnapshot.docs[0].data();
 
     if (todayAttendance) {
       if (todayAttendance.clock_out) {
@@ -2819,10 +2476,12 @@ async function fetchAttendance() {
         clockInBtn.classList.add('hidden');
         clockOutBtn.classList.remove('hidden');
       }
-      clockInTimeDisplay.innerText = new Date(todayAttendance.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const clockInDate = todayAttendance.clock_in?.toDate ? todayAttendance.clock_in.toDate() : new Date(todayAttendance.clock_in);
+      clockInTimeDisplay.innerText = clockInDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       
       if (todayAttendance.clock_out) {
-        const diff = new Date(todayAttendance.clock_out) - new Date(todayAttendance.clock_in);
+        const clockOutDate = todayAttendance.clock_out?.toDate ? todayAttendance.clock_out.toDate() : new Date(todayAttendance.clock_out);
+        const diff = clockOutDate - clockInDate;
         const hours = (diff / (1000 * 60 * 60)).toFixed(1);
         totalHoursDisplay.innerText = `${hours}h`;
       }
@@ -2836,14 +2495,9 @@ async function fetchAttendance() {
     }
 
     // Fetch user's attendance history
-    const { data: history, error: historyError } = await supabase
-      .from('attendance')
-      .select('*')
-      .eq('staff_id', user.id)
-      .order('date', { ascending: false })
-      .limit(10);
-
-    if (historyError) throw historyError;
+    const qHistory = query(collection(db, 'attendance'), where('staff_id', '==', user.uid), orderBy('date', 'desc'), limit(10));
+    const historySnapshot = await getDocs(qHistory);
+    const history = historySnapshot.docs.map(docSnap => docSnap.data());
 
     attendanceHistoryBody.innerHTML = '';
     if (history.length === 0) {
@@ -2851,59 +2505,61 @@ async function fetchAttendance() {
     } else {
       history.forEach(record => {
         const tr = document.createElement('tr');
-        const clockIn = new Date(record.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const clockOut = record.clock_out ? new Date(record.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
+        const clockInDate = record.clock_in?.toDate ? record.clock_in.toDate() : new Date(record.clock_in);
+        const clockIn = clockInDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         
+        let clockOut = '--:--';
         let hours = '--';
+        
+        if (record.clock_out) {
+          const clockOutDate = record.clock_out?.toDate ? record.clock_out.toDate() : new Date(record.clock_out);
+          clockOut = clockOutDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const diff = clockOutDate - clockInDate;
+          hours = (diff / (1000 * 60 * 60)).toFixed(1);
+        }
         if (record.clock_out) {
           const diff = new Date(record.clock_out) - new Date(record.clock_in);
           hours = (diff / (1000 * 60 * 60)).toFixed(1);
         }
 
         tr.innerHTML = `
-          <td>${record.date}</td>
-          <td>${clockIn}</td>
-          <td>${clockOut}</td>
-          <td>${hours}h</td>
-          <td><span class="status-badge ${record.clock_out ? 'status-completed' : (record.status === 'Late' ? 'bg-orange-500/10 text-orange-400' : 'status-pending')}">${record.status}</span></td>
+          <td data-label="Date" class="text-white">${record.date}</td>
+          <td data-label="Clock In" class="text-slate-400">${clockIn}</td>
+          <td data-label="Clock Out" class="text-slate-400">${clockOut}</td>
+          <td data-label="Hours" class="text-cyan-400">${hours}h</td>
+          <td data-label="Status"><span class="status-badge ${record.clock_out ? 'status-completed' : (record.status === 'Late' ? 'bg-orange-500/10 text-orange-400' : 'status-pending')}">${record.status}</span></td>
         `;
         attendanceHistoryBody.appendChild(tr);
       });
     }
 
-      // Admin/HR View: All Staff Attendance
-      const isAdmin = localStorage.getItem('isAdminSession') === 'true';
-      const isHR = userRole === 'HR';
-      if ((isAdmin || isHR) && adminAttendanceBody) {
-        const { data: allAttendance, error: allAttendanceError } = await supabase
-          .from('attendance')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(50);
+    if (isAdmin && adminAttendanceBody) {
+      const q = query(collection(db, 'attendance'), orderBy('created_at', 'desc'), limit(50));
+      const snapshot = await getDocs(q);
+      const allAttendance = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
-        if (allAttendanceError) throw allAttendanceError;
-
-        adminAttendanceBody.innerHTML = '';
-        allAttendance.forEach(record => {
-          const tr = document.createElement('tr');
-          const clockIn = new Date(record.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          const clockOut = record.clock_out ? new Date(record.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
-          
-          tr.innerHTML = `
-            <td>${record.staff_name || 'Unknown'}</td>
-            <td>${record.date}</td>
-            <td>${clockIn}</td>
-            <td>${clockOut}</td>
-            <td><span class="status-badge ${record.clock_out ? 'status-completed' : (record.status === 'Late' ? 'bg-orange-500/10 text-orange-400' : 'status-pending')}">${record.status}</span></td>
-            <td>
-              <button onclick="deleteAttendanceRecord('${record.id}')" class="text-red-400 hover:text-red-300">
-                <i class="fas fa-trash-alt"></i>
-              </button>
-            </td>
-          `;
-          adminAttendanceBody.appendChild(tr);
-        });
-      }
+      adminAttendanceBody.innerHTML = '';
+      allAttendance.forEach(record => {
+        const tr = document.createElement('tr');
+        const clockInDate = record.clock_in?.toDate ? record.clock_in.toDate() : new Date(record.clock_in);
+        const clockIn = clockInDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const clockOut = record.clock_out ? (record.clock_out.toDate ? record.clock_out.toDate() : new Date(record.clock_out)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
+        
+        tr.innerHTML = `
+          <td data-label="Staff">${record.staff_name || 'Unknown'}</td>
+          <td data-label="Date">${record.date}</td>
+          <td data-label="Clock In">${clockIn}</td>
+          <td data-label="Clock Out">${clockOut}</td>
+          <td data-label="Status"><span class="status-badge ${record.clock_out ? 'status-completed' : (record.status === 'Late' ? 'bg-orange-500/10 text-orange-400' : 'status-pending')}">${record.status}</span></td>
+          <td data-label="Action">
+            <button onclick="deleteAttendanceRecord('${record.id}')" class="text-red-400 hover:text-red-300">
+              <i class="fas fa-trash-alt"></i>
+            </button>
+          </td>
+        `;
+        adminAttendanceBody.appendChild(tr);
+      });
+    }
 
   } catch (err) {
     console.error("Error fetching attendance:", err);
@@ -2921,25 +2577,20 @@ if (dashClockInBtn) {
 
 async function handleClockIn() {
     try {
-      const userResponse = await supabase.auth.getUser();
-      const user = userResponse.data.user;
+      const user = auth.currentUser;
       if (!user) {
         showToast('You must be logged in to clock in', 'error');
         return;
       }
 
-      const staffName = user.user_metadata?.full_name || userName || user.email.split('@')[0];
+      const staffName = user.displayName || user.email.split('@')[0];
       const today = new Date().toISOString().split('T')[0];
       
       // Check if already clocked in for today
-      const { data: existing } = await supabase
-        .from('attendance')
-        .select('id')
-        .eq('staff_id', user.id)
-        .eq('date', today)
-        .maybeSingle();
+      const q = query(collection(db, 'attendance'), where('staff_id', '==', user.uid), where('date', '==', today), limit(1));
+      const snapshot = await getDocs(q);
 
-      if (existing) {
+      if (!snapshot.empty) {
         showToast('You have already clocked in for today', 'info');
         return;
       }
@@ -2948,17 +2599,13 @@ async function handleClockIn() {
       const now = new Date();
       const isLate = now.getHours() >= 9 && (now.getHours() > 9 || now.getMinutes() > 0);
 
-      const { error } = await supabase
-        .from('attendance')
-        .insert([{
-          staff_id: user.id,
-          staff_name: staffName,
-          clock_in: now.toISOString(),
-          date: today,
-          status: isLate ? 'Late' : 'Present'
-        }]);
-
-      if (error) throw error;
+      await addDoc(collection(db, 'attendance'), {
+        staff_id: user.uid,
+        staff_name: staffName,
+        clock_in: serverTimestamp(),
+        date: today,
+        status: isLate ? 'Late' : 'Present'
+      });
 
       showToast(`Clocked in successfully! ${isLate ? '(Marked as Late)' : ''}`, isLate ? 'warning' : 'success');
       fetchAttendance();
@@ -2973,12 +2620,7 @@ window.deleteAttendanceRecord = async (id) => {
   if (!confirm('Are you sure you want to delete this attendance record?')) return;
   
   try {
-    const { error } = await supabase
-      .from('attendance')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
+    await deleteDoc(doc(db, 'attendance', id));
     showToast('Record deleted', 'success');
     fetchAttendance();
   } catch (err) {
@@ -2997,24 +2639,31 @@ if (dashClockOutBtn) {
 
 async function handleClockOut() {
     try {
-      const userResponse = await supabase.auth.getUser();
-      const user = userResponse.data.user;
+      const user = auth.currentUser;
       if (!user) return;
 
       const today = new Date().toISOString().split('T')[0];
 
       // Fetch today's record to check duration
-      const { data: record, error: fetchError } = await supabase
-        .from('attendance')
-        .select('*')
-        .eq('staff_id', user.id)
-        .eq('date', today)
-        .is('clock_out', null)
-        .maybeSingle();
+      const q = query(
+        collection(db, 'attendance'), 
+        where('staff_id', '==', user.uid), 
+        where('date', '==', today),
+        limit(1)
+      );
+      const snapshot = await getDocs(q);
+      
+      if (snapshot.empty) throw new Error("Clock-in record not found. Please clock in first.");
+      
+      const attDoc = snapshot.docs[0];
+      const record = attDoc.data();
+      
+      if (record.clock_out) {
+        showToast('You have already clocked out for today', 'info');
+        return;
+      }
 
-      if (fetchError || !record) throw new Error("Clock-in record not found. Please clock in first.");
-
-      const clockInTime = new Date(record.clock_in);
+      const clockInTime = record.clock_in?.toDate ? record.clock_in.toDate() : new Date(record.clock_in);
       const now = new Date();
       const diffMs = now - clockInTime;
       const diffHours = diffMs / (1000 * 60 * 60);
@@ -3025,15 +2674,10 @@ async function handleClockOut() {
         return;
       }
 
-      const { error } = await supabase
-        .from('attendance')
-        .update({ 
-          clock_out: now.toISOString(),
-          status: 'Completed'
-        })
-        .eq('id', record.id);
-
-      if (error) throw error;
+      await updateDoc(doc(db, 'attendance', attDoc.id), { 
+        clock_out: serverTimestamp(),
+        status: 'Completed'
+      });
 
       showToast('Clocked out successfully! Great work today.', 'success');
       fetchAttendance();
@@ -3081,15 +2725,13 @@ if (notificationBell && notificationDropdown) {
 if (clearNotificationsBtn && notificationList) {
   clearNotificationsBtn.addEventListener('click', async () => {
     try {
-      const user = (await supabase.auth.getUser()).data.user;
+      const user = auth.currentUser;
       if (!user) return;
 
-      const { error } = await supabase
-        .from('notifications')
-        .delete()
-        .eq('user_id', user.id);
-
-      if (error) throw error;
+      const q = query(collection(db, 'notifications'), where('user_id', '==', user.uid));
+      const snapshot = await getDocs(q);
+      const deletePromises = snapshot.docs.map(docSnap => deleteDoc(doc(db, 'notifications', docSnap.id)));
+      await Promise.all(deletePromises);
 
       notificationList.innerHTML = '<p class="text-center text-slate-500 py-4 text-xs">No new notifications</p>';
       if (notificationBadge) notificationBadge.classList.add('hidden');
@@ -3110,26 +2752,18 @@ async function fetchAdminTasks() {
 
   try {
     // Fetch all staff first to create a map for names
-    const { data: staffList, error: staffError } = await supabase
-      .from('staff')
-      .select('id, name');
-    
-    if (staffError) throw staffError;
-
+    const staffSnapshot = await getDocs(collection(db, 'users'));
     const staffMap = {};
-    if (staffList) {
-      staffList.forEach(s => staffMap[s.id] = s.name);
-    }
+    staffSnapshot.forEach(docSnap => {
+      const data = docSnap.data();
+      staffMap[docSnap.id] = data.name;
+    });
 
-    const { data: tasks, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
+    const tasksSnapshot = await getDocs(query(collection(db, 'tasks'), orderBy('created_at', 'desc')));
+    const tasks = tasksSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
     adminTaskTableBody.innerHTML = '';
-    if (!tasks || tasks.length === 0) {
+    if (tasks.length === 0) {
       adminTaskTableBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-slate-500">No tasks assigned yet.</td></tr>';
       return;
     }
@@ -3146,12 +2780,12 @@ async function fetchAdminTasks() {
       const assigneeName = staffMap[task.assignee_id] || 'Unknown';
 
       tr.innerHTML = `
-        <td><div class="font-bold">${task.title}</div></td>
-        <td>${assigneeName}</td>
-        <td><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
-        <td>${task.due_date}</td>
-        <td><span class="status-badge ${statusClass}">${task.status}</span></td>
-        <td>
+        <td data-label="Task"><div class="font-bold">${task.title}</div></td>
+        <td data-label="Assignee">${assigneeName}</td>
+        <td data-label="Priority"><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
+        <td data-label="Due Date">${task.due_date}</td>
+        <td data-label="Status"><span class="status-badge ${statusClass}">${task.status}</span></td>
+        <td data-label="Action">
           <button onclick="sendTaskReminder(event, '${task.id}', '${task.title}', '${assigneeName}')" class="text-cyan-400 hover:text-cyan-300 text-xs font-bold" ${task.status === 'completed' ? 'disabled opacity-50' : ''}>
             <i class="fas fa-paper-plane mr-1"></i> Remind
           </button>
@@ -3189,23 +2823,12 @@ window.sendTaskReminder = async (event, taskId, taskTitle, assigneeName) => {
 
 async function checkTaskReminders() {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = auth.currentUser;
     if (!user) return;
 
-    // Get staff ID
-    const { data: staffMember } = await supabase
-      .from('staff')
-      .select('id')
-      .eq('email', user.email)
-      .single();
-
-    if (!staffMember) return;
-
-    const { data: tasks } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('assignee_id', staffMember.id)
-      .neq('status', 'completed');
+    const q = query(collection(db, 'tasks'), where('assignee_id', '==', user.uid), where('status', '!=', 'completed'));
+    const snapshot = await getDocs(q);
+    const tasks = snapshot.docs.map(docSnap => docSnap.data());
 
     if (!tasks) return;
 
@@ -3236,17 +2859,12 @@ async function fetchNotifications() {
   if (!notificationList) return;
 
   try {
-    const user = (await supabase.auth.getUser()).data.user;
+    const user = auth.currentUser;
     if (!user) return;
 
-    const { data: notifications, error } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(20);
-
-    if (error) throw error;
+    const q = query(collection(db, 'notifications'), where('user_id', '==', user.uid), orderBy('created_at', 'desc'), limit(20));
+    const snapshot = await getDocs(q);
+    const notifications = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
     notificationList.innerHTML = '';
     
@@ -3268,18 +2886,19 @@ async function fetchNotifications() {
     notifications.forEach(notif => {
       const div = document.createElement('div');
       div.className = `p-3 rounded-lg border border-white/5 hover:bg-white/5 transition-colors cursor-pointer ${notif.read ? 'opacity-60' : 'bg-white/5'}`;
+      const createdAt = notif.created_at?.toDate ? notif.created_at.toDate() : new Date(notif.created_at || Date.now());
       div.innerHTML = `
         <div class="flex justify-between items-start mb-1">
           <p class="text-sm font-semibold">${notif.title}</p>
           <span class="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold">${notif.tag || 'Info'}</span>
         </div>
         <p class="text-xs text-slate-400">${notif.message}</p>
-        <span class="text-[10px] text-slate-500 mt-1 block">${new Date(notif.created_at).toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</span>
+        <span class="text-[10px] text-slate-500 mt-1 block">${createdAt.toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</span>
       `;
       
       div.onclick = async () => {
         if (!notif.read) {
-          await supabase.from('notifications').update({ read: true }).eq('id', notif.id);
+          await updateDoc(doc(db, 'notifications', notif.id), { read: true });
           fetchNotifications();
         }
       };
@@ -3293,22 +2912,19 @@ async function fetchNotifications() {
 }
 
 async function addNotification(title, message, tag) {
-  const user = (await supabase.auth.getUser()).data.user;
+  const user = auth.currentUser;
   if (!user) return;
 
   try {
-    const { error } = await supabase
-      .from('notifications')
-      .insert([{
-        user_id: user.id,
-        title,
-        message,
-        tag,
-        read: false,
-        created_at: new Date().toISOString()
-      }]);
+    await addDoc(collection(db, 'notifications'), {
+      user_id: user.uid,
+      title,
+      message,
+      tag,
+      read: false,
+      created_at: serverTimestamp()
+    });
 
-    if (error) throw error;
     fetchNotifications();
   } catch (error) {
     console.error("Error adding notification:", error);
@@ -3322,20 +2938,14 @@ async function showTaskDetails(taskId) {
   if (!modal || !content) return;
 
   try {
-    const { data: task, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('id', taskId)
-      .single();
+    const taskSnap = await getDoc(doc(db, 'tasks', taskId));
+    if (!taskSnap.exists()) throw new Error("Task not found");
+    const task = taskSnap.data();
 
-    if (error) throw error;
+    const staffSnap = await getDoc(doc(db, 'users', task.assignee_id));
+    const staffName = staffSnap.exists() ? staffSnap.data().name : 'Unknown';
 
-    const { data: staffList } = await supabase
-      .from('staff')
-      .select('name')
-      .eq('id', task.assignee_id);
-    
-    const staffName = staffList && staffList.length > 0 ? staffList[0].name : 'Unknown';
+    const completionDate = task.completion_date?.toDate ? task.completion_date.toDate() : (task.completion_date ? new Date(task.completion_date) : null);
 
     content.innerHTML = `
       <div class="mb-6">
@@ -3363,10 +2973,10 @@ async function showTaskDetails(taskId) {
           <p class="text-[10px] text-slate-500 uppercase font-bold mb-1">Reminders</p>
           <p class="font-bold">${task.reminders ? 'Enabled' : 'Disabled'}</p>
         </div>
-        ${task.completion_date ? `
+        ${completionDate ? `
         <div class="glass p-4 rounded-xl col-span-2 border-emerald-500/20">
           <p class="text-[10px] text-emerald-500 uppercase font-bold mb-1">Completed On</p>
-          <p class="font-bold text-emerald-400">${new Date(task.completion_date).toLocaleString()}</p>
+          <p class="font-bold text-emerald-400">${completionDate.toLocaleString()}</p>
         </div>
         ` : ''}
       </div>
@@ -3418,19 +3028,18 @@ async function fetchBlogs() {
   if (!container) return;
 
   try {
-    const { data: blogs, error } = await supabase
-      .from('blogs')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const q = query(collection(db, 'blogs'), orderBy('created_at', 'desc'));
+    const snapshot = await getDocs(q);
+    const blogs = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
-    if (error) throw error;
-
-    if (!blogs || blogs.length === 0) {
+    if (blogs.length === 0) {
       container.innerHTML = '<div class="col-span-full text-center py-12 text-slate-500">No blog posts found yet. Check back soon!</div>';
       return;
     }
 
-    container.innerHTML = blogs.map((blog, index) => `
+    container.innerHTML = blogs.map((blog, index) => {
+      const createdAt = blog.created_at?.toDate ? blog.created_at.toDate() : new Date(blog.created_at || Date.now());
+      return `
       <article class="glass p-8 reveal" style="transition-delay: ${index * 100}ms">
         <div class="mb-6 overflow-hidden rounded-xl h-48 bg-slate-900">
           <img src="${blog.image_url || 'https://picsum.photos/seed/blog/800/400'}" alt="${blog.title}" class="w-full h-full object-cover">
@@ -3438,13 +3047,13 @@ async function fetchBlogs() {
         <div class="flex items-center gap-4 text-xs text-cyan-400 mb-4 uppercase tracking-widest font-bold">
           <span>${blog.category}</span>
           <span>•</span>
-          <span>${new Date(blog.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
+          <span>${createdAt.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
         </div>
         <h3 class="text-2xl font-bold mb-4">${blog.title}</h3>
         <p class="text-slate-400 mb-6">${blog.excerpt || 'Read our latest insights...'}</p>
         <a href="/blog-story.html?id=${blog.id}" class="text-cyan-400 font-bold hover:underline">Read Full Story →</a>
       </article>
-    `).join('');
+    `}).join('');
 
     // Trigger reveal
     setTimeout(() => {
@@ -3462,26 +3071,25 @@ async function fetchAdminBlogs() {
   if (!tableBody) return;
 
   try {
-    const { data: blogs, error } = await supabase
-      .from('blogs')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const q = query(collection(db, 'blogs'), orderBy('created_at', 'desc'));
+    const snapshot = await getDocs(q);
+    const blogs = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
-    if (error) throw error;
-
-    if (!blogs || blogs.length === 0) {
+    if (blogs.length === 0) {
       tableBody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-slate-500">No blogs found. Create your first post!</td></tr>';
       return;
     }
 
-    tableBody.innerHTML = blogs.map(blog => `
+    tableBody.innerHTML = blogs.map(blog => {
+      const createdAt = blog.created_at?.toDate ? blog.created_at.toDate() : new Date(blog.created_at || Date.now());
+      return `
       <tr>
         <td>
           <img src="${blog.image_url}" class="w-12 h-12 rounded object-cover border border-white/10">
         </td>
         <td class="font-bold">${blog.title}</td>
         <td><span class="status-badge bg-cyan-500/10 text-cyan-400">${blog.category}</span></td>
-        <td class="text-slate-400 text-sm">${new Date(blog.created_at).toLocaleDateString()}</td>
+        <td class="text-slate-400 text-sm">${createdAt.toLocaleDateString()}</td>
         <td>
           <div class="flex gap-2">
             <button onclick="editBlog('${blog.id}')" class="text-cyan-400 hover:text-white transition-colors"><i class="fas fa-edit"></i></button>
@@ -3489,7 +3097,7 @@ async function fetchAdminBlogs() {
           </div>
         </td>
       </tr>
-    `).join('');
+    `}).join('');
   } catch (error) {
     console.error("Error fetching admin blogs:", error);
     tableBody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-red-400">Error loading blogs.</td></tr>';
@@ -3561,18 +3169,15 @@ if (blogForm) {
         image_url: imageUrl,
         excerpt,
         content,
-        updated_at: new Date().toISOString()
+        updated_at: serverTimestamp()
       };
 
-      let error;
       if (id) {
-        ({ error } = await supabase.from('blogs').update(blogData).eq('id', id));
+        await updateDoc(doc(db, 'blogs', id), blogData);
       } else {
-        blogData.created_at = new Date().toISOString();
-        ({ error } = await supabase.from('blogs').insert([blogData]));
+        blogData.created_at = serverTimestamp();
+        await addDoc(collection(db, 'blogs'), blogData);
       }
-
-      if (error) throw error;
 
       showToast(id ? 'Blog updated successfully!' : 'Blog published successfully!', 'success');
       blogModal.classList.add('hidden');
@@ -3588,15 +3193,11 @@ if (blogForm) {
 
 window.editBlog = async (id) => {
   try {
-    const { data: blog, error } = await supabase
-      .from('blogs')
-      .select('*')
-      .eq('id', id)
-      .single();
+    const blogSnap = await getDoc(doc(db, 'blogs', id));
+    if (!blogSnap.exists()) throw new Error("Blog not found");
+    const blog = blogSnap.data();
 
-    if (error) throw error;
-
-    document.getElementById('blog-id').value = blog.id;
+    document.getElementById('blog-id').value = id;
     document.getElementById('blog-title').value = blog.title;
     document.getElementById('blog-category').value = blog.category;
     document.getElementById('blog-image-url').value = blog.image_url;
@@ -3623,13 +3224,7 @@ window.deleteBlog = async (id) => {
   if (!confirm('Are you sure you want to delete this blog post?')) return;
 
   try {
-    const { error } = await supabase
-      .from('blogs')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
-
+    await deleteDoc(doc(db, 'blogs', id));
     showToast('Blog deleted successfully!', 'success');
     fetchAdminBlogs();
   } catch (error) {

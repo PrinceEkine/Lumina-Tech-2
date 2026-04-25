@@ -1,0 +1,235 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user account details and roles.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["Admin", "HR", "Staff", "Client", "CEO", "Ass CEO"] },
+        "phone_number": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "role"]
+    },
+    "Attendance": {
+      "title": "Attendance Record",
+      "description": "Daily clock-in and clock-out logs.",
+      "type": "object",
+      "properties": {
+        "staff_id": { "type": "string" },
+        "staff_name": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "clock_in": { "type": "string", "format": "date-time" },
+        "clock_out": { "type": "string", "format": "date-time" },
+        "status": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["staff_id", "date"]
+    },
+    "Task": {
+      "title": "Assigned Task",
+      "description": "Tasks assigned to staff members.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "assignee_id": { "type": "string" },
+        "category": { "type": "string" },
+        "priority": { "type": "string" },
+        "due_date": { "type": "string", "format": "date" },
+        "description": { "type": "string" },
+        "reminders": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["pending", "in-progress", "completed"] },
+        "created_at": { "type": "string", "format": "date-time" },
+        "created_by": { "type": "string" },
+        "completion_date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "assignee_id", "status"]
+    },
+    "Message": {
+      "title": "Chat Message",
+      "description": "Messages for global or private chat.",
+      "type": "object",
+      "properties": {
+        "sender_id": { "type": "string" },
+        "sender_name": { "type": "string" },
+        "recipient_id": { "type": "string" },
+        "content": { "type": "string" },
+        "status": { "type": "string", "enum": ["sent", "read"] },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["sender_id", "content", "created_at"]
+    },
+    "LeaveRequest": {
+      "title": "Leave Request",
+      "description": "Requests for leave from work.",
+      "type": "object",
+      "properties": {
+        "staff_id": { "type": "string" },
+        "staff_name": { "type": "string" },
+        "type": { "type": "string" },
+        "start_date": { "type": "string", "format": "date" },
+        "end_date": { "type": "string", "format": "date" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"] },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["staff_id", "type", "start_date", "end_date", "status"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Company-wide news and updates.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "message": { "type": "string" },
+        "author_id": { "type": "string" },
+        "author_name": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["content", "created_at"]
+    },
+    "Media": {
+      "title": "Media File",
+      "description": "Metadata for uploaded files.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "url": { "type": "string" },
+        "type": { "type": "string" },
+        "size": { "type": "number" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "url", "type", "size", "created_at"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "In-app notifications for users.",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "tag": { "type": "string" },
+        "read": { "type": "boolean" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user_id", "title", "message", "read", "created_at"]
+    },
+    "Blog": {
+      "title": "Blog Post",
+      "description": "Insights and stories.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "image_url": { "type": "string" },
+        "excerpt": { "type": "string" },
+        "content": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "content", "created_at"]
+    },
+    "Recognition": {
+      "title": "Staff Recognition",
+      "description": "Awards and recognition for team members.",
+      "type": "object",
+      "properties": {
+        "staff_id": { "type": "string" },
+        "staff_name": { "type": "string" },
+        "type": { "type": "string" },
+        "message": { "type": "string" },
+        "reason": { "type": "string" },
+        "recognized_by": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["staff_id", "staff_name", "type", "message", "created_at"]
+    },
+    "Inquiry": {
+      "title": "Contact Inquiry",
+      "description": "Inquiries from the contact form.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string", "enum": ["new", "read"] },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "subject", "message", "status", "created_at"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Service bookings from clients.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "company": { "type": "string" },
+        "service": { "type": "string" },
+        "timeline": { "type": "string" },
+        "budget": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string" },
+        "price": { "type": "number" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Staff and client profiles."
+    },
+    "attendance/{attendanceId}": {
+      "schema": "Attendance",
+      "description": "Staff attendance records."
+    },
+    "tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Tasks assigned to staff."
+    },
+    "messages/{messageId}": {
+      "schema": "Message",
+      "description": "Chat messages."
+    },
+    "leave_requests/{requestId}": {
+      "schema": "LeaveRequest",
+      "description": "Staff leave applications."
+    },
+    "announcements/{announcementId}": {
+      "schema": "Announcement",
+      "description": "Global announcements."
+    },
+    "media/{fileId}": {
+      "schema": "Media",
+      "description": "File metadata."
+    },
+    "notifications/{notifId}": {
+      "schema": "Notification",
+      "description": "User notifications."
+    },
+    "blogs/{blogId}": {
+      "schema": "Blog",
+      "description": "Blog posts."
+    },
+    "recognition/{recognitionId}": {
+      "schema": "Recognition",
+      "description": "Peer and admin recognition."
+    },
+    "inquiries/{inquiryId}": {
+      "schema": "Inquiry",
+      "description": "Contact form submissions."
+    },
+    "bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Project bookings."
+    }
+  }
+}
