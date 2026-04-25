@@ -1117,6 +1117,22 @@
           <div class="glass p-8">
             <h3 class="text-xl font-bold mb-6 flex items-center gap-2"><i class="fas fa-user-cog text-cyan-400"></i> Profile Settings</h3>
             <form id="profile-settings-form" class="flex flex-col gap-4">
+              <div class="flex items-center gap-6 mb-4">
+                <div class="relative group">
+                  <div id="settings-avatar-preview" class="w-20 h-20 rounded-full bg-slate-800 border-2 border-cyan-500/50 flex items-center justify-center text-white text-2xl font-bold overflow-hidden">
+                    U
+                  </div>
+                  <label for="profile-pic-upload" class="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white text-xs text-center font-bold px-2 rounded-full">
+                    Change Photo
+                  </label>
+                  <input type="file" id="profile-pic-upload" class="hidden" accept="image/*">
+                </div>
+                <div>
+                  <h4 class="font-bold text-white leading-none mb-1">Profile Photo</h4>
+                  <p class="text-[10px] text-slate-400">Update your avatar across the platform.</p>
+                  <p id="upload-status" class="text-[10px] text-cyan-400 mt-1 hidden font-bold animate-pulse">Uploading...</p>
+                </div>
+              </div>
               <div class="form-group">
                 <label>Full Name</label>
                 <input type="text" id="settings-name" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2">

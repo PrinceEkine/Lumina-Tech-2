@@ -125,7 +125,7 @@
   -- go to RLS settings in Supabase and ensure users have INSERT/SELECT permissions.
 */
 
-import { auth, db } from './firebase';
+import { auth, db, storage } from './firebase';
 import { 
   onAuthStateChanged, 
   signInWithEmailAndPassword,
@@ -152,6 +152,7 @@ import {
   or,
   and
 } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { isAdmin, logout as authLogout } from './auth';
 import { setupTheme, CurrencyManager, setupCurrencySelectors } from './ui';
 import { showToast, setLoading, sendEmail } from './utils';
@@ -279,6 +280,26 @@ let userUsername = '';
 let typingTimeout = null;
 let chatChannel = null;
 
+const updateUserAvatars = (name, photo) => {
+  const avatars = [
+    { id: 'user-avatar-sidebar' },
+    { id: 'user-avatar-header' },
+    { id: 'settings-avatar-preview' }
+  ];
+  avatars.forEach(av => {
+    const el = document.getElementById(av.id);
+    if (el) {
+      if (photo) {
+        el.innerHTML = `<img src="${photo}" class="w-full h-full object-cover">`;
+        el.style.padding = '0';
+      } else {
+        el.innerText = name ? name.charAt(0).toUpperCase() : 'U';
+        el.style.padding = '';
+      }
+    }
+  });
+};
+
 // Auth State Listener
 try {
   onAuthStateChanged(auth, async (user) => {
@@ -383,11 +404,12 @@ try {
         if (el) el.value = val;
       };
 
+      const userPhotoURL = userData.photo_url || user.photoURL || null;
+
       updateText('user-name-sidebar', userName);
       updateText('user-role-sidebar', userRole);
-      updateText('user-avatar-sidebar', userName.charAt(0).toUpperCase());
+      updateUserAvatars(userName, userPhotoURL);
       updateText('user-name-header', userName);
-      updateText('user-avatar-header', userName.charAt(0).toUpperCase());
       updateText('user-username-header', `@${userUsername}`);
       updateText('welcome-name', userName);
       updateValue('settings-name', userName);
@@ -1003,6 +1025,12 @@ async function fetchChatMessages() {
       });
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
+  }, (err) => {
+    console.error("Chat Snapshot Error:", err);
+    chatMessages.innerHTML = `<div class="p-8 text-center text-red-400 text-xs text-balance">
+      <i class="fas fa-exclamation-triangle mb-2 text-xl"></i><br>
+      Failed to load messages. This usually means a database index is being created. Please wait a few minutes.
+    </div>`;
   });
 }
 
@@ -1012,10 +1040,16 @@ if (teamChatForm) {
     const content = chatInput.value.trim();
     if (!content) return;
 
+    const submitBtn = teamChatForm.querySelector('button[type="submit"]');
+    const originalBtnHtml = submitBtn.innerHTML;
+
     try {
       const user = auth.currentUser;
       if (!user) throw new Error("Log in to send messages");
       
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
       const isAdminFlag = localStorage.getItem('isAdminSession') === 'true';
       const senderName = isAdminFlag ? 'Admin' : (user.displayName || user.email.split('@')[0]);
 
@@ -1029,9 +1063,13 @@ if (teamChatForm) {
       });
 
       chatInput.value = '';
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalBtnHtml;
     } catch (err) {
       console.error("Error sending message:", err);
       showToast("Failed to send message.", "error");
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalBtnHtml;
     }
   });
 }
@@ -1365,16 +1403,22 @@ async function fetchLeaveRequests() {
       if (leave.status === 'Pending') pendingCount++;
       if (leave.status === 'Approved') approvedCount++;
 
-      const tr = document.createElement('tr');
-      const start = new Date(leave.start_date);
-      const end = new Date(leave.end_date);
-      const days = Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1;
+      const startDateVal = leave.start_date || '';
+      const endDateVal = leave.end_date || '';
+      const start = new Date(startDateVal);
+      const end = new Date(endDateVal);
+      let days = '--';
+      if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+        days = Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1;
+        if (days < 0) days = 0;
+      }
 
+      const tr = document.createElement('tr');
       tr.innerHTML = `
         <td data-label="Type">${leave.type}</td>
-        <td data-label="Start Date">${leave.start_date}</td>
-        <td data-label="End Date">${leave.end_date}</td>
-        <td data-label="Duration">${days} Days</td>
+        <td data-label="Start Date">${startDateVal || '--'}</td>
+        <td data-label="End Date">${endDateVal || '--'}</td>
+        <td data-label="Duration">${days} ${days === '--' ? '' : 'Days'}</td>
         <td data-label="Status"><span class="status-badge ${leave.status === 'Approved' ? 'status-completed' : leave.status === 'Rejected' ? 'status-cancelled' : 'status-pending'}">${leave.status}</span></td>
         <td data-label="Action">${leave.status === 'Pending' ? `<button onclick="cancelLeave('${leave.id}')" class="text-red-400 hover:text-red-500"><i class="fas fa-times"></i></button>` : '--'}</td>
       `;
@@ -1573,23 +1617,24 @@ async function fetchStaff() {
   
   console.log("[fetchStaff] Fetching staff members...");
   try {
-    // Attempt with ordering, if it fails maybe index is missing
-    let q;
-    try {
-      q = query(collection(db, 'users'), orderBy('created_at', 'desc'));
-      const snapshot = await getDocs(q);
-      const staffList = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-      populateStaffTable(staffList);
-    } catch (orderErr) {
-      console.warn("[fetchStaff] Ordered query failed, falling back to unordered:", orderErr);
-      q = query(collection(db, 'users'));
-      const snapshot = await getDocs(q);
-      const staffList = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-      populateStaffTable(staffList);
-    }
+    const q = query(collection(db, 'users'), orderBy('name'));
+    const snapshot = await getDocs(q);
+    const staffList = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    
+    // Filter out Clients if they accidentally show up
+    const filteredStaff = staffList.filter(s => s.role !== 'Client');
+    populateStaffTable(filteredStaff);
   } catch (error) {
     console.error("Error fetching staff:", error);
-    staffTableBody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-red-500">Error loading staff list.</td></tr>`;
+    // Final fallback
+    try {
+      const q = query(collection(db, 'users'));
+      const snapshot = await getDocs(q);
+      const staffList = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      populateStaffTable(staffList.filter(s => s.role !== 'Client'));
+    } catch (e) {
+      staffTableBody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-red-500">Error loading staff list.</td></tr>`;
+    }
   }
 }
 
@@ -1655,9 +1700,10 @@ if (assignTaskForm) {
     const submitBtn = assignTaskForm.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerText;
 
-    const assigneeId = document.getElementById('task-assignee').value;
+    const assigneeSelect = document.getElementById('task-assignee');
+    const assigneeId = assigneeSelect ? assigneeSelect.value : '';
     
-    if (!assigneeId || assigneeId === "") {
+    if (!assigneeId || assigneeId === "" || assigneeId === "null") {
       showToast('Please select a staff member from the dropdown list.', 'warning');
       return;
     }
@@ -2170,15 +2216,45 @@ if (profileSettingsForm) {
       const headerName = document.getElementById('user-name-header');
       const sidebarName = document.getElementById('user-name-sidebar');
       
-      if (welcomeName) welcomeName.innerText = newName;
-      if (headerName) headerName.innerText = newName;
-      if (sidebarName) sidebarName.innerText = newName;
-      
-    } catch (err) {
-      console.error("Profile update failed:", err);
-      showToast(`Error: ${err.message}`, 'error');
     } finally {
       setLoading(submitBtn, false, originalText);
+    }
+  });
+}
+
+const profilePicUpload = document.getElementById('profile-pic-upload');
+if (profilePicUpload) {
+  profilePicUpload.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('Image size must be less than 2MB', 'error');
+      return;
+    }
+    
+    const statusEl = document.getElementById('upload-status');
+    if (statusEl) statusEl.classList.remove('hidden');
+    
+    try {
+      const user = auth.currentUser;
+      const storageRef = ref(storage, `profile_pics/${user.uid}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+      
+      await updateProfile(user, { photoURL: downloadURL });
+      await updateDoc(doc(db, 'users', user.uid), { photo_url: downloadURL });
+      
+      const currentName = document.getElementById('settings-name').value;
+      updateUserAvatars(currentName, downloadURL);
+      
+      showToast('Profile picture updated!', 'success');
+    } catch (error) {
+      console.error("Upload failed:", error);
+      showToast('Upload failed. Ensure Firebase Storage is configured.', 'error');
+    } finally {
+      if (statusEl) statusEl.classList.add('hidden');
+      profilePicUpload.value = '';
     }
   });
 }
@@ -2520,7 +2596,16 @@ async function fetchAttendance() {
     } else {
       history.forEach(record => {
         const tr = document.createElement('tr');
-        const clockInDate = record.clock_in?.toDate ? record.clock_in.toDate() : new Date(record.clock_in);
+        const clockInVal = record.clock_in;
+        let clockInDate;
+        if (clockInVal && clockInVal.toDate) {
+          clockInDate = clockInVal.toDate();
+        } else if (clockInVal) {
+          clockInDate = new Date(clockInVal);
+        } else {
+          clockInDate = new Date();
+        }
+        
         const clockIn = clockInDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         
         let clockOut = '--:--';
@@ -2556,7 +2641,15 @@ async function fetchAttendance() {
       adminAttendanceBody.innerHTML = '';
       allAttendance.forEach(record => {
         const tr = document.createElement('tr');
-        const clockInDate = record.clock_in?.toDate ? record.clock_in.toDate() : new Date(record.clock_in);
+        const clockInVal = record.clock_in;
+        let clockInDate;
+        if (clockInVal && clockInVal.toDate) {
+          clockInDate = clockInVal.toDate();
+        } else if (clockInVal) {
+          clockInDate = new Date(clockInVal);
+        } else {
+          clockInDate = new Date();
+        }
         const clockIn = clockInDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const clockOut = record.clock_out ? (record.clock_out.toDate ? record.clock_out.toDate() : new Date(record.clock_out)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
         

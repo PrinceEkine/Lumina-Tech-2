@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import firebaseConfig from './firebase-applet-config.json';
 
@@ -19,6 +20,7 @@ try {
 
 export { db };
 export const auth = getAuth(app);
+export const storage = getStorage(app);
 
 // Analytics
 isSupported().then(yes => {

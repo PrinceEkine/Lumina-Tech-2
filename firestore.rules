@@ -59,7 +59,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isOwner(userId) && isValidUser(incoming()) && incoming().role == 'Staff'; // Default role for self-reg
-      allow update: if (isSignedIn() && isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone_number', 'updated_at'])) || isAdmin();
+      allow update: if (isSignedIn() && isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone_number', 'username', 'photo_url', 'updated_at'])) || isAdmin();
       allow delete: if isAdmin();
     }
 
