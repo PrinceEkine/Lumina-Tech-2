@@ -355,7 +355,8 @@ try {
       try {
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         
-        const isCEO = user.email === 'princedagogoekine@gmail.com' || user.email === 'soberetamunoala@gmail.com';
+        const isCEO = user.email === 'soberetamunoala@gmail.com';
+        const isAssCEO = user.email === 'princedagogoekine@gmail.com';
         
         if (!userDoc.exists()) {
           // Auto-register if not exists
@@ -364,7 +365,7 @@ try {
             name: user.displayName || user.email.split('@')[0],
             email: user.email,
             username: user.email.split('@')[0],
-            role: isCEO ? 'CEO' : (isUserAdmin ? 'Admin' : 'Staff'),
+            role: isCEO ? 'CEO' : (isAssCEO ? 'Assistant CEO' : (isUserAdmin ? 'Admin' : 'Staff')),
             status: 'Active',
             created_at: serverTimestamp()
           };
@@ -386,14 +387,16 @@ try {
           // Role Override for known admins
           if (isCEO) {
             userRole = 'CEO';
-          } else if (isUserAdmin && !['Admin', 'CEO', 'Ass CEO', 'HR'].includes(userRole)) {
+          } else if (isAssCEO) {
+            userRole = 'Assistant CEO';
+          } else if (isUserAdmin && !['Admin', 'CEO', 'Assistant CEO', 'Ass CEO', 'HR'].includes(userRole)) {
             userRole = 'Admin';
           }
         }
         
         // Final UI Role Visibility
         document.body.classList.remove('is-admin', 'is-hr', 'is-staff');
-        if (userRole === 'Admin' || userRole === 'CEO' || userRole === 'Ass CEO') {
+        if (userRole === 'Admin' || userRole === 'CEO' || userRole === 'Assistant CEO' || userRole === 'Ass CEO') {
           document.body.classList.add('is-admin');
         } else if (userRole === 'HR') {
           document.body.classList.add('is-hr');
@@ -427,7 +430,7 @@ try {
       updateValue('settings-email', user.email);
 
       // Data Fetching
-      if (userRole === 'Admin' || userRole === 'HR' || userRole === 'CEO' || userRole === 'Ass CEO') {
+      if (userRole === 'Admin' || userRole === 'HR' || userRole === 'CEO' || userRole === 'Assistant CEO' || userRole === 'Ass CEO') {
         fetchDashboardStats();
         fetchBookings();
         fetchStaff();
@@ -1002,6 +1005,13 @@ async function fetchChatMessages() {
       );
     }
     
+    // Manual sort by date
+    filteredMsgs.sort((a, b) => {
+      const dateA = a.created_at?.toDate ? a.created_at.toDate() : new Date(a.created_at || Date.now());
+      const dateB = b.created_at?.toDate ? b.created_at.toDate() : new Date(b.created_at || Date.now());
+      return dateA - dateB;
+    });
+    
     if (filteredMsgs.length === 0) {
       chatMessages.innerHTML = `
         <div class="flex flex-col items-center justify-center h-full gap-4 text-center opacity-40">
@@ -1011,8 +1021,7 @@ async function fetchChatMessages() {
           <p class="text-xs">No messages with ${activeChatName.innerText} yet.</p>
         </div>`;
     } else {
-      snapshot.docs.forEach(docSnap => {
-        const msg = docSnap.data();
+      filteredMsgs.forEach(msg => {
         const isMe = msg.sender_id === currentMyId;
         const msgDiv = document.createElement('div');
         msgDiv.className = `msg-wa ${isMe ? 'outgoing' : 'incoming'}`;
@@ -1029,14 +1038,14 @@ async function fetchChatMessages() {
         msgDiv.innerHTML = `
           ${activeRecipient === 'global' && !isMe ? `<p class="text-[10px] font-bold text-cyan-400 mb-0.5">${msg.sender_name}</p>` : ''}
           <div class="flex flex-col">
-            <span class="text-sm">${msg.content}</span>
+            <span class="text-sm">${msg.content || msg.message}</span>
             <span class="time">${timeStr}${statusHtml}</span>
           </div>
         `;
         chatMessages.appendChild(msgDiv);
 
         if (!isMe && activeRecipient !== 'global' && msg.status !== 'read') {
-          updateDoc(doc(db, 'messages', docSnap.id), { status: 'read' });
+          updateDoc(doc(db, 'messages', msg.id), { status: 'read' });
         }
       });
       chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -1127,13 +1136,13 @@ async function fetchAnnouncements() {
       data.forEach(ann => {
         const annDiv = document.createElement('div');
         annDiv.className = 'glass p-6 border-l-4 border-cyan-500';
-        const date = ann.created_at?.toDate() || new Date();
+        const date = ann.created_at?.toDate ? ann.created_at.toDate() : new Date();
         annDiv.innerHTML = `
           <div class="flex justify-between items-start mb-4">
             <h3 class="text-xl font-bold">${ann.title}</h3>
             <span class="text-xs text-slate-400">${date.toLocaleDateString()}</span>
           </div>
-          <p class="text-slate-300 leading-relaxed">${ann.content}</p>
+          <p class="text-slate-300 leading-relaxed whitespace-pre-wrap">${ann.message || ann.content}</p>
           <div class="mt-4 pt-4 border-t border-white/5 flex items-center gap-2">
             <div class="w-6 h-6 rounded-full bg-cyan-500/20 flex items-center justify-center text-[10px] text-cyan-400 font-bold">
               ${(ann.author_name || 'A').charAt(0)}
@@ -1143,10 +1152,51 @@ async function fetchAnnouncements() {
         `;
         announcementsList.appendChild(annDiv);
       });
+
+      // Simple Login Popup for latest announcement
+      const latest = data[0];
+      const sessKey = `seen_${latest.created_at?.seconds || latest.title}`;
+      if (!sessionStorage.getItem(sessKey)) {
+        showAnnouncementPopup(latest);
+        sessionStorage.setItem(sessKey, 'true');
+      }
     }
   } catch (err) {
     console.error("Error fetching announcements:", err);
   }
+}
+
+function showAnnouncementPopup(ann) {
+  const popup = document.createElement('div');
+  popup.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm';
+  const date = ann.created_at?.toDate ? ann.created_at.toDate() : new Date();
+  popup.innerHTML = `
+    <div class="bg-slate-900 border border-white/10 rounded-2xl p-8 max-w-lg w-full shadow-2xl relative animate-scale-in">
+      <button class="absolute top-4 right-4 text-slate-500 hover:text-white" onclick="this.closest('.fixed').remove()">
+        <i class="fas fa-times"></i>
+      </button>
+      <div class="mb-4 text-cyan-400 text-xs font-bold uppercase tracking-widest">Latest Announcement</div>
+      <h2 class="text-2xl font-bold text-white mb-4">${ann.title}</h2>
+      <div class="text-slate-300 text-sm leading-relaxed mb-6 whitespace-pre-wrap max-h-[40vh] overflow-y-auto">
+        ${ann.message || ann.content}
+      </div>
+      <div class="flex items-center justify-between pt-6 border-t border-white/5">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400 text-xs font-bold">
+            ${(ann.author_name || 'A').charAt(0)}
+          </div>
+          <div>
+            <p class="text-white text-[10px] font-bold">${ann.author_name || 'Admin'}</p>
+            <p class="text-slate-500 text-[9px]">${date.toLocaleDateString()}</p>
+          </div>
+        </div>
+        <button onclick="this.closest('.fixed').remove()" class="bg-cyan-500 hover:bg-cyan-600 text-black font-bold px-6 py-2 rounded-lg transition-all text-xs">
+          Understand
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(popup);
 }
 
 if (addAnnouncementBtn && announcementModal && announcementModalClose) {
@@ -1445,22 +1495,26 @@ async function fetchLeaveRequests() {
       if (leave.status === 'Pending') pendingCount++;
       if (leave.status === 'Approved') approvedCount++;
 
-      const startDateVal = leave.start_date || '';
-      const endDateVal = leave.end_date || '';
-      const start = new Date(startDateVal);
-      const end = new Date(endDateVal);
+      const startDateVal = leave.start_date || '--';
+      const endDateVal = leave.end_date || '--';
+      const reasonVal = leave.reason || '--';
+      
       let days = '--';
-      if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-        days = Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1;
-        if (days < 0) days = 0;
+      if (startDateVal !== '--' && endDateVal !== '--') {
+        const start = new Date(startDateVal);
+        const end = new Date(endDateVal);
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          days = Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1;
+          if (days < 0) days = 0;
+        }
       }
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td data-label="Type">${leave.type}</td>
-        <td data-label="Start Date">${startDateVal || '--'}</td>
-        <td data-label="End Date">${endDateVal || '--'}</td>
+        <td data-label="Dates">${startDateVal} to ${endDateVal}</td>
         <td data-label="Duration">${days} ${days === '--' ? '' : 'Days'}</td>
+        <td data-label="Reason" class="max-w-[150px] truncate" title="${reasonVal}">${reasonVal}</td>
         <td data-label="Status"><span class="status-badge ${leave.status === 'Approved' ? 'status-completed' : leave.status === 'Rejected' ? 'status-cancelled' : 'status-pending'}">${leave.status}</span></td>
         <td data-label="Action">${leave.status === 'Pending' ? `<button onclick="cancelLeave('${leave.id}')" class="text-red-400 hover:text-red-500"><i class="fas fa-times"></i></button>` : '--'}</td>
       `;
