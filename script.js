@@ -350,48 +350,58 @@ try {
       userRole = 'Staff';
       userName = user.displayName || user.email.split('@')[0];
       userUsername = user.email.split('@')[0];
+      let userData = {};
 
-      if (isUserAdmin) {
-        userRole = 'Admin';
-        document.body.classList.add('is-admin');
-        document.body.classList.remove('is-staff', 'is-hr');
-      } else {
-        // Check users collection for role
-        try {
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        
+        const isCEO = user.email === 'princedagogoekine@gmail.com' || user.email === 'soberetamunoala@gmail.com';
+        
+        if (!userDoc.exists()) {
+          // Auto-register if not exists
+          const newUser = {
+            id: user.uid,
+            name: user.displayName || user.email.split('@')[0],
+            email: user.email,
+            username: user.email.split('@')[0],
+            role: isCEO ? 'CEO' : (isUserAdmin ? 'Admin' : 'Staff'),
+            status: 'Active',
+            created_at: serverTimestamp()
+          };
+          await setDoc(doc(db, 'users', user.uid), newUser);
+          userRole = newUser.role;
+          userData = newUser;
+          userName = newUser.name;
+          userUsername = newUser.username;
+        } else {
+          userData = userDoc.data();
+          userRole = userData.role;
+          userName = userData.name || user.displayName || user.email.split('@')[0];
+          userUsername = userData.username || user.email.split('@')[0];
+
+          // Ensure name isn't just "User" if we have better info
+          if (userName === 'User' && user.displayName) userName = user.displayName;
+          if (userUsername === 'username' && user.email) userUsername = user.email.split('@')[0];
           
-          if (!userDoc.exists()) {
-            // Auto-register if not exists
-            const newUser = {
-              id: user.uid,
-              name: userName,
-              email: user.email,
-              username: userUsername,
-              role: 'Staff',
-              status: 'Active',
-              created_at: serverTimestamp()
-            };
-            await setDoc(doc(db, 'users', user.uid), newUser);
-            userRole = 'Staff';
-          } else {
-            const userData = userDoc.data();
-            userRole = userData.role;
-            userName = userData.name;
-            userUsername = userData.username || user.email.split('@')[0];
+          // Role Override for known admins
+          if (isCEO) {
+            userRole = 'CEO';
+          } else if (isUserAdmin && !['Admin', 'CEO', 'Ass CEO', 'HR'].includes(userRole)) {
+            userRole = 'Admin';
           }
-          
-          // Role Based Visibility
-          document.body.classList.remove('is-admin', 'is-hr', 'is-staff');
-          if (userRole === 'Admin' || userRole === 'CEO' || userRole === 'Ass CEO') {
-            document.body.classList.add('is-admin');
-          } else if (userRole === 'HR') {
-            document.body.classList.add('is-hr');
-          } else {
-            document.body.classList.add('is-staff');
-          }
-        } catch (err) {
-          console.error("Role check failed:", err);
         }
+        
+        // Final UI Role Visibility
+        document.body.classList.remove('is-admin', 'is-hr', 'is-staff');
+        if (userRole === 'Admin' || userRole === 'CEO' || userRole === 'Ass CEO') {
+          document.body.classList.add('is-admin');
+        } else if (userRole === 'HR') {
+          document.body.classList.add('is-hr');
+        } else {
+          document.body.classList.add('is-staff');
+        }
+      } catch (err) {
+        console.error("Role check failed:", err);
       }
 
       // Update UI elements
@@ -973,19 +983,26 @@ async function fetchChatMessages() {
       orderBy('created_at', 'asc')
     );
   } else {
+    // Simplified query to avoid index requirements for now
     q = query(
       collection(db, 'messages'),
-      or(
-        and(where('sender_id', '==', currentMyId), where('recipient_id', '==', activeRecipient)),
-        and(where('sender_id', '==', activeRecipient), where('recipient_id', '==', currentMyId))
-      ),
       orderBy('created_at', 'asc')
     );
   }
 
-  unsubscribeChat = onSnapshot(q, (snapshot) => {
+  const handleSnapshot = (snapshot) => {
     chatMessages.innerHTML = '';
-    if (snapshot.empty) {
+    const allMsgs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    let filteredMsgs = allMsgs;
+    if (activeRecipient !== 'global') {
+      filteredMsgs = allMsgs.filter(m => 
+        (m.sender_id === currentMyId && m.recipient_id === activeRecipient) ||
+        (m.sender_id === activeRecipient && m.recipient_id === currentMyId)
+      );
+    }
+    
+    if (filteredMsgs.length === 0) {
       chatMessages.innerHTML = `
         <div class="flex flex-col items-center justify-center h-full gap-4 text-center opacity-40">
           <div class="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-3xl">
@@ -994,7 +1011,6 @@ async function fetchChatMessages() {
           <p class="text-xs">No messages with ${activeChatName.innerText} yet.</p>
         </div>`;
     } else {
-      // Group by date would be nice, but let's keep it simple for now
       snapshot.docs.forEach(docSnap => {
         const msg = docSnap.data();
         const isMe = msg.sender_id === currentMyId;
@@ -1007,7 +1023,7 @@ async function fetchChatMessages() {
             <i class="fas ${isRead ? 'fa-check-double' : 'fa-check'}"></i>
           </span>` : '';
 
-        const date = msg.created_at?.toDate() || new Date();
+        const date = msg.created_at?.toDate ? msg.created_at.toDate() : new Date();
         const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         
         msgDiv.innerHTML = `
@@ -1020,18 +1036,24 @@ async function fetchChatMessages() {
         chatMessages.appendChild(msgDiv);
 
         if (!isMe && activeRecipient !== 'global' && msg.status !== 'read') {
-          updateDoc(docSnap.ref, { status: 'read' });
+          updateDoc(doc(db, 'messages', docSnap.id), { status: 'read' });
         }
       });
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
-  }, (err) => {
-    console.error("Chat Snapshot Error:", err);
-    chatMessages.innerHTML = `<div class="p-8 text-center text-red-400 text-xs text-balance">
-      <i class="fas fa-exclamation-triangle mb-2 text-xl"></i><br>
-      Failed to load messages. This usually means a database index is being created. Please wait a few minutes.
-    </div>`;
-  });
+  };
+
+  try {
+    unsubscribeChat = onSnapshot(q, handleSnapshot, (err) => {
+      console.warn("Chat index error, falling back:", err);
+      const fallbackQ = query(collection(db, 'messages'));
+      unsubscribeChat = onSnapshot(fallbackQ, handleSnapshot, (err2) => {
+        console.error("Chat total failure:", err2);
+      });
+    });
+  } catch (err) {
+    console.error("Chat setup error:", err);
+  }
 }
 
 if (teamChatForm) {
@@ -1084,12 +1106,21 @@ const addAnnouncementForm = document.getElementById('add-announcement-form');
 async function fetchAnnouncements() {
   if (!announcementsList) return;
   
-  try {
-    const q = query(collection(db, 'announcements'), orderBy('created_at', 'desc'));
-    const snapshot = await getDocs(q);
-    const data = snapshot.docs.map(doc => doc.data());
+      try {
+        const q = query(collection(db, 'announcements'), orderBy('created_at', 'desc'));
+        const snapshot = await getDocs(q);
+        const data = snapshot.docs.map(doc => doc.data());
 
-    announcementsList.innerHTML = '';
+        const btnContainer = document.getElementById('add-announcement-btn-container');
+        if (btnContainer) {
+          if (userRole === 'Admin' || userRole === 'CEO' || userRole === 'Ass CEO' || userRole === 'HR') {
+            btnContainer.classList.remove('hidden');
+          } else {
+            btnContainer.classList.add('hidden');
+          }
+        }
+
+        announcementsList.innerHTML = '';
     if (data.length === 0) {
       announcementsList.innerHTML = '<div class="text-center py-12 text-slate-500">No announcements yet</div>';
     } else {
@@ -1364,7 +1395,18 @@ if (recognitionForm) {
 
     try {
       await addDoc(collection(db, 'recognition'), { staff_id: staffId, staff_name: staffName, type, message, created_at: serverTimestamp() });
-      showToast('Recognition submitted!', 'success');
+      
+      // Add notification for the recipient
+      await addDoc(collection(db, 'notifications'), {
+        user_id: staffId,
+        title: 'New Recognition!',
+        message: `Award from Management: ${type} - ${message}`,
+        tag: 'Recognition',
+        read: false,
+        created_at: serverTimestamp()
+      });
+
+      showToast('Recognition submitted and staff notified!', 'success');
       recognitionModal.classList.add('hidden');
       recognitionForm.reset();
       fetchRecognition();
@@ -2586,8 +2628,15 @@ async function fetchAttendance() {
     }
 
     // Fetch user's attendance history
-    const qHistory = query(collection(db, 'attendance'), where('staff_id', '==', user.uid), orderBy('date', 'desc'), limit(10));
-    const historySnapshot = await getDocs(qHistory);
+    let qHistory = query(collection(db, 'attendance'), where('staff_id', '==', user.uid), orderBy('date', 'desc'), limit(10));
+    let historySnapshot;
+    try {
+      historySnapshot = await getDocs(qHistory);
+    } catch (err) {
+      console.warn("Attendance history index missing, falling back:", err);
+      qHistory = query(collection(db, 'attendance'), where('staff_id', '==', user.uid), limit(10));
+      historySnapshot = await getDocs(qHistory);
+    }
     const history = historySnapshot.docs.map(docSnap => docSnap.data());
 
     attendanceHistoryBody.innerHTML = '';
@@ -2612,13 +2661,16 @@ async function fetchAttendance() {
         let hours = '--';
         
         if (record.clock_out) {
-          const clockOutDate = record.clock_out?.toDate ? record.clock_out.toDate() : new Date(record.clock_out);
+          const clockOutVal = record.clock_out;
+          let clockOutDate;
+          if (clockOutVal && clockOutVal.toDate) {
+            clockOutDate = clockOutVal.toDate();
+          } else {
+            clockOutDate = new Date(clockOutVal);
+          }
+          
           clockOut = clockOutDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
           const diff = clockOutDate - clockInDate;
-          hours = (diff / (1000 * 60 * 60)).toFixed(1);
-        }
-        if (record.clock_out) {
-          const diff = new Date(record.clock_out) - new Date(record.clock_in);
           hours = (diff / (1000 * 60 * 60)).toFixed(1);
         }
 
@@ -2633,10 +2685,18 @@ async function fetchAttendance() {
       });
     }
 
-    if (isAdmin && adminAttendanceBody) {
-      const q = query(collection(db, 'attendance'), orderBy('created_at', 'desc'), limit(50));
-      const snapshot = await getDocs(q);
-      const allAttendance = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    const isUserAdmin = await isAdmin(user);
+    if (isUserAdmin && adminAttendanceBody) {
+      let qAdm = query(collection(db, 'attendance'), orderBy('created_at', 'desc'), limit(50));
+      let admSnapshot;
+      try {
+        admSnapshot = await getDocs(qAdm);
+      } catch (err) {
+        console.warn("Admin attendance index missing, falling back:", err);
+        qAdm = query(collection(db, 'attendance'), limit(50));
+        admSnapshot = await getDocs(qAdm);
+      }
+      const allAttendance = admSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
       adminAttendanceBody.innerHTML = '';
       allAttendance.forEach(record => {
@@ -2650,13 +2710,25 @@ async function fetchAttendance() {
         } else {
           clockInDate = new Date();
         }
-        const clockIn = clockInDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const clockOut = record.clock_out ? (record.clock_out.toDate ? record.clock_out.toDate() : new Date(record.clock_out)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
+        
+        const clockInStr = clockInDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        let clockOut = '--:--';
+        if (record.clock_out) {
+          const clockOutVal = record.clock_out;
+          let clockOutDate;
+          if (clockOutVal && clockOutVal.toDate) {
+            clockOutDate = clockOutVal.toDate();
+          } else {
+            clockOutDate = new Date(clockOutVal);
+          }
+          clockOut = clockOutDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
         
         tr.innerHTML = `
           <td data-label="Staff">${record.staff_name || 'Unknown'}</td>
           <td data-label="Date">${record.date}</td>
-          <td data-label="Clock In">${clockIn}</td>
+          <td data-label="Clock In">${clockInStr}</td>
           <td data-label="Clock Out">${clockOut}</td>
           <td data-label="Status"><span class="status-badge ${record.clock_out ? 'status-completed' : (record.status === 'Late' ? 'bg-orange-500/10 text-orange-400' : 'status-pending')}">${record.status}</span></td>
           <td data-label="Action">
@@ -2970,8 +3042,15 @@ async function fetchNotifications() {
     const user = auth.currentUser;
     if (!user) return;
 
-    const q = query(collection(db, 'notifications'), where('user_id', '==', user.uid), orderBy('created_at', 'desc'), limit(20));
-    const snapshot = await getDocs(q);
+    let q = query(collection(db, 'notifications'), where('user_id', '==', user.uid), orderBy('created_at', 'desc'), limit(20));
+    let snapshot;
+    try {
+      snapshot = await getDocs(q);
+    } catch (indexErr) {
+      console.warn("Notifications index missing or error, falling back:", indexErr);
+      q = query(collection(db, 'notifications'), where('user_id', '==', user.uid), limit(20));
+      snapshot = await getDocs(q);
+    }
     const notifications = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
     notificationList.innerHTML = '';
