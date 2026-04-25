@@ -1571,11 +1571,30 @@ const staffTableBody = document.getElementById('staff-table-body');
 async function fetchStaff() {
   if (!staffTableBody) return;
   
+  console.log("[fetchStaff] Fetching staff members...");
   try {
-    const q = query(collection(db, 'users'), orderBy('created_at', 'desc'));
-    const snapshot = await getDocs(q);
-    const staffList = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    // Attempt with ordering, if it fails maybe index is missing
+    let q;
+    try {
+      q = query(collection(db, 'users'), orderBy('created_at', 'desc'));
+      const snapshot = await getDocs(q);
+      const staffList = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      populateStaffTable(staffList);
+    } catch (orderErr) {
+      console.warn("[fetchStaff] Ordered query failed, falling back to unordered:", orderErr);
+      q = query(collection(db, 'users'));
+      const snapshot = await getDocs(q);
+      const staffList = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      populateStaffTable(staffList);
+    }
+  } catch (error) {
+    console.error("Error fetching staff:", error);
+    staffTableBody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-red-500">Error loading staff list.</td></tr>`;
+  }
+}
 
+function populateStaffTable(staffList) {
+    console.log(`[fetchStaff] Found ${staffList.length} staff members.`);
     staffTableBody.innerHTML = '';
     
     if (staffList.length === 0) {
@@ -1601,10 +1620,6 @@ async function fetchStaff() {
       `;
       staffTableBody.appendChild(tr);
     });
-  } catch (error) {
-    console.error("Error fetching staff:", error);
-    staffTableBody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-red-500">Error loading staff list.</td></tr>`;
-  }
 }
 
 // Task Management Logic

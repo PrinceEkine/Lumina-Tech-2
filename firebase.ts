@@ -5,7 +5,19 @@ import { getAnalytics, isSupported } from 'firebase/analytics';
 import firebaseConfig from './firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || undefined);
+const dbId = firebaseConfig.firestoreDatabaseId || undefined;
+console.log(`[Firebase] Initializing with DB ID: ${dbId || 'default'}`);
+
+let db;
+try {
+  db = getFirestore(app, dbId);
+} catch (err) {
+  console.error("[Firebase] Fatal error initializing Firestore:", err);
+  // Fallback to default if specifically configured one fails
+  db = getFirestore(app);
+}
+
+export { db };
 export const auth = getAuth(app);
 
 // Analytics

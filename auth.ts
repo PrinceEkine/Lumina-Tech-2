@@ -16,14 +16,20 @@ export const isAdmin = async (user: FirebaseUser | null) => {
     'soberetamunoala@gmail.com'
   ];
   
-  if (adminEmails.includes(user.email || '')) return true;
+  if (adminEmails.includes(user.email || '')) {
+    console.log(`[isAdmin] Authorized by email: ${user.email}`);
+    return true;
+  }
   
   try {
     const userDoc = await getDoc(doc(db, 'users', user.uid));
     if (userDoc.exists()) {
-      const role = userDoc.data().role;
+      const data = userDoc.data();
+      const role = data.role;
+      console.log(`[isAdmin] User doc found. Role: ${role}`);
       return role === 'Admin' || role === 'CEO' || role === 'Ass CEO';
     }
+    console.log(`[isAdmin] No user doc found for UID: ${user.uid}`);
     return false;
   } catch (err) {
     console.error("Error checking admin status:", err);
