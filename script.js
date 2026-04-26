@@ -158,7 +158,43 @@ import { setupTheme, CurrencyManager, setupCurrencySelectors } from './ui';
 import { showToast, setLoading, sendEmail } from './utils';
 
 // 1. IMMEDIATE UI INITIALIZATION (Do this first so it works even if DB fails)
+window.addEventListener('scroll', () => {
+  const backToTop = document.getElementById('back-to-top');
+  if (backToTop) {
+    if (window.scrollY > 500) {
+      backToTop.classList.add('visible');
+      backToTop.style.opacity = '1';
+      backToTop.style.visibility = 'visible';
+    } else {
+      backToTop.style.opacity = '0';
+      backToTop.style.visibility = 'hidden';
+    }
+  }
+});
+
+const backToTopBtn = document.getElementById('back-to-top');
+if (backToTopBtn) {
+  backToTopBtn.addEventListener('click', () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+}
+
+// Reveal on Scroll Logic
+const revealElements = document.querySelectorAll('.reveal');
+if (revealElements.length > 0) {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('active');
+      }
+    });
+  }, { threshold: 0.1 });
+  
+  revealElements.forEach(el => observer.observe(el));
+}
+
 document.body.classList.add('js-enabled');
+
 
 // Initialize UI
 setupTheme();
@@ -240,23 +276,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
-// Scroll Reveal Animation
-const revealElements = document.querySelectorAll('.reveal');
-const revealOnScroll = () => {
-  revealElements.forEach((el) => {
-    const elementTop = el.getBoundingClientRect().top;
-    const windowHeight = window.innerHeight;
-    if (elementTop < windowHeight - 50) {
-      el.classList.add('active');
-    }
-  });
-};
-
-window.addEventListener('scroll', revealOnScroll);
-document.addEventListener('DOMContentLoaded', revealOnScroll);
-window.addEventListener('load', revealOnScroll);
-revealOnScroll(); // Initial check
-
 // 2. EXTERNAL LIBRARY & DB INITIALIZATION (Wrapped to prevent blocking UI)
 
 // Initialize intl-tel-input
@@ -290,7 +309,7 @@ const updateUserAvatars = (name, photo) => {
     const el = document.getElementById(av.id);
     if (el) {
       if (photo) {
-        el.innerHTML = `<img src="${photo}" class="w-full h-full object-cover">`;
+        el.innerHTML = `<img src="${photo}" class="w-full h-full object-cover" loading="lazy">`;
         el.style.padding = '0';
       } else {
         el.innerText = name ? name.charAt(0).toUpperCase() : 'U';
@@ -595,11 +614,11 @@ if (loadMoreBtn && hiddenPosts.length > 0) {
 const forms = document.querySelectorAll('form');
 forms.forEach(form => {
   form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
     // Skip generic handling for specifically named forms
     const specificFormHandlers = ['add-announcement-form', 'assign-task-form', 'send-email-form', 'recognition-form', 'leave-form', 'blog-form', 'add-staff-form', 'home-chat-form', 'floating-chat-form'];
     if (specificFormHandlers.includes(form.id)) return;
-
-    e.preventDefault();
     const submitBtn = form.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerText;
     
@@ -1615,7 +1634,7 @@ async function fetchMedia() {
 
         itemDiv.innerHTML = `
           <div class="aspect-square flex items-center justify-center mb-3 bg-slate-900 rounded-lg">
-            ${item.type.includes('image') ? `<img src="${item.url}" class="w-full h-full object-cover rounded-lg" referrerPolicy="no-referrer">` : `<i class="fas ${icon} text-3xl text-slate-500"></i>`}
+            ${item.type.includes('image') ? `<img src="${item.url}" class="w-full h-full object-cover rounded-lg" referrerPolicy="no-referrer" loading="lazy">` : `<i class="fas ${icon} text-3xl text-slate-500"></i>`}
           </div>
           <p class="text-[10px] font-bold truncate mb-1">${item.name}</p>
           <p class="text-[8px] text-slate-500">${(item.size / 1024).toFixed(1)} KB</p>
@@ -2180,11 +2199,11 @@ async function fetchStaffDashboardStats() {
           const statusClass = task.status === 'completed' ? 'status-completed' : 'status-pending';
 
           tr.innerHTML = `
-            <td><div class="font-bold">${task.title}</div></td>
-            <td><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
-            <td>${task.due_date}</td>
-            <td><span class="status-badge ${statusClass}">${task.status}</span></td>
-            <td>
+            <td data-label="Task"><div class="font-bold">${task.title}</div></td>
+            <td data-label="Priority"><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
+            <td data-label="Due Date">${task.due_date}</td>
+            <td data-label="Status"><span class="status-badge ${statusClass}">${task.status}</span></td>
+            <td data-label="Action">
               <button onclick="document.getElementById('nav-my-tasks').click()" class="text-cyan-400 hover:text-cyan-300 text-xs font-bold">
                 View
               </button>
@@ -2299,15 +2318,15 @@ async function fetchDashboardStats() {
           const statusClass = booking.status === 'Pending' ? 'status-pending' : 'status-completed';
           const price = booking.price || defaultPrice;
           tr.innerHTML = `
-            <td>
+            <td data-label="Client">
               <div class="font-bold">${booking.client_name}</div>
               <div class="text-xs text-slate-400">${booking.email}</div>
             </td>
-            <td>${booking.service}</td>
-            <td>${booking.date}</td>
-            <td>${currencyManager.format(price)}</td>
-            <td><span class="status-badge ${statusClass}">${booking.status}</span></td>
-            <td><button class="text-slate-400 hover:text-white" onclick="document.getElementById('nav-bookings').click()"><i class="fas fa-ellipsis-h"></i></button></td>
+            <td data-label="Service">${booking.service}</td>
+            <td data-label="Date">${booking.date}</td>
+            <td data-label="Price">${currencyManager.format(price)}</td>
+            <td data-label="Status"><span class="status-badge ${statusClass}">${booking.status}</span></td>
+            <td data-label="Action"><button class="text-slate-400 hover:text-white" onclick="document.getElementById('nav-bookings').click()"><i class="fas fa-ellipsis-h"></i></button></td>
           `;
           recentBookingsBody.appendChild(tr);
         });
@@ -3407,7 +3426,7 @@ async function fetchBlogs() {
       return `
       <article class="glass p-8 reveal" style="transition-delay: ${index * 100}ms">
         <div class="mb-6 overflow-hidden rounded-xl h-48 bg-slate-900">
-          <img src="${blog.image_url || 'https://picsum.photos/seed/blog/800/400'}" alt="${blog.title}" class="w-full h-full object-cover">
+          <img src="${blog.image_url || 'https://picsum.photos/seed/blog/800/400'}" alt="${blog.title}" class="w-full h-full object-cover" loading="lazy">
         </div>
         <div class="flex items-center gap-4 text-xs text-cyan-400 mb-4 uppercase tracking-widest font-bold">
           <span>${blog.category}</span>
@@ -3450,7 +3469,7 @@ async function fetchAdminBlogs() {
       return `
       <tr>
         <td>
-          <img src="${blog.image_url}" class="w-12 h-12 rounded object-cover border border-white/10">
+          <img src="${blog.image_url}" class="w-12 h-12 rounded object-cover border border-white/10" loading="lazy">
         </td>
         <td class="font-bold">${blog.title}</td>
         <td><span class="status-badge bg-cyan-500/10 text-cyan-400">${blog.category}</span></td>
