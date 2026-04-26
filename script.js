@@ -961,19 +961,37 @@ async function fetchAnnouncements() {
     } else {
       data.forEach(ann => {
         const annDiv = document.createElement('div');
-        annDiv.className = 'glass p-6 border-l-4 border-cyan-500';
+        annDiv.className = 'glass p-6 border-l-4 border-cyan-500 cursor-pointer hover:bg-white/5 transition-all relative';
+        annDiv.onclick = (e) => {
+          if (!e.target.closest('button')) showAnnouncementDetails(ann);
+        };
         const date = ann.created_at?.toDate ? ann.created_at.toDate() : new Date();
+        const isAdmin = userRole === 'Admin' || userRole === 'CEO' || userRole === 'HR';
+
         annDiv.innerHTML = `
           <div class="flex justify-between items-start mb-4">
-            <h3 class="text-xl font-bold">${ann.title}</h3>
-            <span class="text-xs text-slate-400">${date.toLocaleDateString()}</span>
+            <h3 class="text-xl font-bold text-white pr-8">${ann.title || 'Official Announcement'}</h3>
+            <span class="text-xs text-slate-400 font-medium">${date.toLocaleDateString()}</span>
           </div>
-          <p class="text-slate-300 leading-relaxed whitespace-pre-wrap">${ann.message || ann.content}</p>
-          <div class="mt-4 pt-4 border-t border-white/5 flex items-center gap-2">
-            <div class="w-6 h-6 rounded-full bg-cyan-500/20 flex items-center justify-center text-[10px] text-cyan-400 font-bold">
-              ${(ann.author_name || 'A').charAt(0)}
+          <div class="mb-6">
+            <p class="text-slate-300 leading-relaxed whitespace-pre-wrap">${ann.message || ann.content || 'Please click to view announcement details.'}</p>
+          </div>
+          <div class="flex items-center justify-between mt-auto">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center text-xs text-cyan-400 font-bold border border-cyan-500/30">
+                ${(ann.author_name || 'A').charAt(0)}
+              </div>
+              <div>
+                <p class="text-[10px] text-slate-500 uppercase tracking-tighter">Posted by</p>
+                <p class="text-xs font-bold text-slate-300">${ann.author_name || 'Management'}</p>
+              </div>
             </div>
-            <span class="text-xs text-slate-400">Posted by ${ann.author_name || 'Admin'}</span>
+            <div class="flex items-center gap-3">
+              ${isAdmin ? `<button onclick="deleteAnnouncement(event, '${ann.id || ann.title}')" class="p-2 text-slate-500 hover:text-red-400 transition-colors" title="Delete Announcement"><i class="fas fa-trash-alt"></i></button>` : ''}
+              <span class="text-cyan-400 text-xs font-black uppercase tracking-widest flex items-center">
+                Read Full <i class="fas fa-arrow-right ml-2 animate-bounce-x"></i>
+              </span>
+            </div>
           </div>
         `;
         announcementsList.appendChild(annDiv);
@@ -991,6 +1009,58 @@ async function fetchAnnouncements() {
     console.error("Error fetching announcements:", err);
   }
 }
+
+function showAnnouncementDetails(ann) {
+  const modal = document.getElementById('task-detail-modal'); // Re-use task detail modal for consistency if possible, or use popup
+  const content = document.getElementById('task-detail-content');
+  if (!modal || !content) return;
+
+  const date = ann.created_at?.toDate ? ann.created_at.toDate() : new Date();
+  content.innerHTML = `
+    <div class="p-6">
+      <div class="flex justify-between items-center mb-6">
+        <span class="text-xs font-bold px-3 py-1 bg-cyan-500/20 text-cyan-400 rounded-full">Announcement</span>
+        <span class="text-xs text-slate-400">${date.toLocaleString()}</span>
+      </div>
+      <h2 class="text-2xl font-bold text-white mb-4">${ann.title || 'No Title'}</h2>
+      <div class="bg-slate-900 border border-white/5 rounded-xl p-6 mb-6">
+        <p class="text-slate-300 leading-relaxed whitespace-pre-wrap">${ann.message || ann.content || 'No description available.'}</p>
+      </div>
+      <div class="flex items-center gap-3 pt-6 border-t border-white/5">
+        <div class="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400 font-bold">
+          ${(ann.author_name || 'A').charAt(0)}
+        </div>
+        <div>
+          <p class="text-sm font-bold text-white">${ann.author_name || 'Admin'}</p>
+          <p class="text-xs text-slate-500">Official Communication</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  modal.classList.add('show');
+}
+
+window.deleteAnnouncement = async (event, id) => {
+  event.stopPropagation();
+  if (!confirm('Are you sure you want to delete this announcement?')) return;
+  
+  try {
+    // Try to find the document by ID (if provided) or by querying title if ID is a title
+    // Recommendation: always use doc IDs. For now, assume it's a searchable field if ID is not a firestore ID
+    const q = query(collection(db, 'announcements'), where('title', '==', id));
+    const snapshot = await getDocs(q);
+    
+    const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletePromises);
+    
+    showToast('Announcement deleted', 'success');
+    fetchAnnouncements();
+  } catch (err) {
+    console.error("Delete failed:", err);
+    showToast('Failed to delete', 'error');
+  }
+};
 
 function showAnnouncementPopup(ann) {
   const popup = document.createElement('div');
@@ -2899,16 +2969,17 @@ async function fetchAdminTasks() {
         if (!e.target.closest('button')) showTaskDetails(task.id);
       };
       
-      const priorityClass = `priority-${task.priority.toLowerCase()}`;
+      const priority = task.priority || 'Medium';
+      const priorityClass = `priority-${priority.toLowerCase()}`;
       const statusClass = task.status === 'completed' ? 'status-completed' : 'status-pending';
       const assigneeName = staffMap[task.assignee_id] || 'Unknown';
 
       tr.innerHTML = `
-        <td data-label="Task"><div class="font-bold">${task.title}</div></td>
+        <td data-label="Task"><div class="font-bold text-white">${task.title || 'Untitled Task'}</div></td>
         <td data-label="Assignee">${assigneeName}</td>
-        <td data-label="Priority"><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
-        <td data-label="Due Date">${task.due_date}</td>
-        <td data-label="Status"><span class="status-badge ${statusClass}">${task.status}</span></td>
+        <td data-label="Priority"><span class="priority-badge ${priorityClass}">${priority}</span></td>
+        <td data-label="Due Date">${task.due_date || 'No Date'}</td>
+        <td data-label="Status"><span class="status-badge ${statusClass}">${task.status || 'pending'}</span></td>
         <td data-label="Action">
           <button onclick="sendTaskReminder(event, '${task.id}', '${task.title}', '${assigneeName}')" class="text-cyan-400 hover:text-cyan-300 text-xs font-bold" ${task.status === 'completed' ? 'disabled opacity-50' : ''}>
             <i class="fas fa-paper-plane mr-1"></i> Remind
