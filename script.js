@@ -473,6 +473,78 @@ try {
 } catch (err) { console.error("Firebase auth listener failed:", err); }
 
 
+
+// Restore Floating Chat Widget Logic
+const chatBtn = document.getElementById('chat-btn');
+const chatWidget = document.getElementById('chat-widget');
+const chatClose = document.getElementById('chat-close');
+const floatingChatForm = document.getElementById('floating-chat-form');
+
+if (chatBtn && chatWidget && chatClose) {
+  chatBtn.addEventListener('click', () => {
+    chatWidget.classList.toggle('show');
+  });
+
+  chatClose.addEventListener('click', () => {
+    chatWidget.classList.remove('show');
+  });
+}
+
+if (floatingChatForm) {
+  floatingChatForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const submitBtn = floatingChatForm.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerText;
+    
+    const name = document.getElementById('floating-chat-name').value;
+    const email = document.getElementById('floating-chat-email').value;
+    const message = document.getElementById('floating-chat-message').value;
+
+    setLoading(submitBtn, true, 'Sending...');
+
+    try {
+      // 1. Save to Firestore (Inquiries)
+      await addDoc(collection(db, 'inquiries'), {
+        name,
+        email,
+        subject: 'Chat Inquiry',
+        message,
+        status: 'new',
+        created_at: serverTimestamp()
+      });
+
+      // 2. Send Email Notification to Admins
+      try {
+        const adminEmail1 = 'princedagogoekine@gmail.com';
+        const adminEmail2 = 'soberetamunoala@gmail.com';
+        const subject = `New Chat Inquiry from ${name}`;
+        const body = `From: ${name} (${email})\n\nMessage:\n${message}`;
+
+        await Promise.all([
+          sendEmail(adminEmail1, subject, body),
+          sendEmail(adminEmail2, subject, body)
+        ]);
+      } catch (err) {
+        console.warn("Email simulation or error:", err);
+      }
+
+      showToast('Message sent! We will get back to you shortly.', 'success');
+      floatingChatForm.reset();
+      
+      setTimeout(() => {
+        setLoading(submitBtn, false, originalText);
+        chatWidget.classList.remove('show');
+      }, 1500);
+
+    } catch (error) {
+      console.error("Error sending inquiry:", error);
+      showToast('Failed to send message. Please try again.', 'error');
+      setLoading(submitBtn, false, originalText);
+    }
+  });
+}
+
+
 // Add Staff Modal (Admin Portal)
 const addStaffBtn = document.getElementById('add-staff-btn');
 const staffModal = document.getElementById('staff-modal');
@@ -598,18 +670,21 @@ forms.forEach(form => {
 
         // 2. Send Email Notification
         try {
-          await sendEmail(
-            email, 
-            'Booking Confirmation - Lumina Tech', 
-            `Hi ${name},\n\nYour booking for ${service} on ${date} at ${time} has been received. We will contact you shortly to confirm.\n\nBest regards,\nLumina Tech Team`
-          );
-          
-          const adminEmail = 'princedagogoekine@gmail.com'; 
-          await sendEmail(
-            adminEmail,
-            'New Booking Received',
-            `New booking from ${name} (${email})\nService: ${service}\nDate: ${date}\nTime: ${time}`
-          );
+          const adminEmail1 = 'princedagogoekine@gmail.com';
+          const adminEmail2 = 'soberetamunoala@gmail.com';
+          const adminSubject = 'New Booking Received';
+          const adminBody = `New booking from ${name} (${email})\nService: ${service}\nDate: ${date}\nTime: ${time}`;
+
+          await Promise.all([
+            sendEmail(adminEmail1, adminSubject, adminBody),
+            sendEmail(adminEmail2, adminSubject, adminBody),
+            // Confirmation to client
+            sendEmail(
+              email, 
+              'Booking Confirmation - Lumina Tech', 
+              `Hi ${name},\n\nYour booking for ${service} on ${date} at ${time} has been received. We will contact you shortly to confirm.\n\nBest regards,\nLumina Tech Team`
+            )
+          ]);
         } catch (emailErr) {
           console.error("Failed to send confirmation email:", emailErr);
         }
@@ -1336,6 +1411,21 @@ if (leaveForm) {
         status: 'Pending',
         created_at: serverTimestamp()
       });
+
+      // Notify Admins
+      try {
+        const adminEmail1 = 'princedagogoekine@gmail.com';
+        const adminEmail2 = 'soberetamunoala@gmail.com';
+        const subject = `New Leave Request: ${staffName}`;
+        const body = `Staff Member: ${staffName}\nType: ${leaveType}\nDates: ${leaveStart} to ${leaveEnd}\nReason: ${leaveReason}`;
+
+        await Promise.all([
+          sendEmail(adminEmail1, subject, body),
+          sendEmail(adminEmail2, subject, body)
+        ]);
+      } catch (emailErr) {
+        console.warn("Leave request email failed:", emailErr);
+      }
 
       showToast('Leave request submitted successfully!', 'success');
       leaveModal.classList.add('hidden');
@@ -2389,18 +2479,21 @@ if (contactForm) {
 
       // 2. Send Email Notification
       try {
-        await sendEmail(
-          'princedagogoekine@gmail.com', // Admin email
-          `New Contact Message: ${subject}`,
-          `From: ${name} (${email})\n\nMessage:\n${message}`
-        );
-        
-        // Auto-reply to user
-        await sendEmail(
-          email,
-          'Message Received - Lumina Tech',
-          `Hi ${name},\n\nThank you for reaching out to Lumina Tech. We have received your message regarding "${subject}" and will get back to you as soon as possible.\n\nBest regards,\nLumina Tech Team`
-        );
+        const adminEmail1 = 'princedagogoekine@gmail.com';
+        const adminEmail2 = 'soberetamunoala@gmail.com';
+        const adminSubject = `New Contact Message: ${subject}`;
+        const adminBody = `From: ${name} (${email})\n\nMessage:\n${message}`;
+
+        await Promise.all([
+          sendEmail(adminEmail1, adminSubject, adminBody),
+          sendEmail(adminEmail2, adminSubject, adminBody),
+          // Auto-reply to user
+          sendEmail(
+            email,
+            'Message Received - Lumina Tech',
+            `Hi ${name},\n\nThank you for reaching out to Lumina Tech. We have received your message regarding "${subject}" and will get back to you as soon as possible.\n\nBest regards,\nLumina Tech Team`
+          )
+        ]);
       } catch (emailErr) {
         console.error("Failed to send contact emails:", emailErr);
         if (!isSupabaseConfigured) {
