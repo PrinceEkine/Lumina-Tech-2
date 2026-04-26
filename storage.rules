@@ -1,0 +1,44 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper: Is the user signed in?
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Helper: Check user role from Firestore
+    function getRole() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && getRole() in ['Admin', 'CEO', 'Assistant CEO', 'Ass CEO'];
+    }
+
+    // Profile Pictures: Everyone can read, only owner can write
+    match /profile_pics/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId
+                    && request.resource.size < 2 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+    }
+
+    // Media Storage: Everyone can read, only Admins/HR can write/delete
+    match /media/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write, delete: if isAdmin() || (isSignedIn() && getRole() == 'HR');
+    }
+    
+    // Blog Images: Everyone can read, only Admins can write
+    match /blogs/{allPaths=**} {
+      allow read: if true;
+      allow write, delete: if isAdmin();
+    }
+
+    // Default deny for everything else
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

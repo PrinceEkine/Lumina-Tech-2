@@ -876,15 +876,33 @@ body.light-mode .btn-secondary {
 }
 
 /* Role-based visibility */
-.admin-only, .staff-only {
-  display: none;
+.admin-only, .hr-only, .staff-only {
+  display: none !important;
 }
 
 body.is-admin .admin-only,
-body.is-hr .admin-only,
-body.is-admin .staff-only,
+body.is-admin .hr-only,
+body.is-admin .staff-only {
+  display: block !important;
+}
+
+body.is-hr .hr-only,
+body.is-hr .staff-only {
+  display: block !important;
+}
+
 body.is-staff .staff-only {
-  display: block;
+  display: block !important;
+}
+
+/* Specific fix for LI elements to keep their layout */
+body.is-admin li.admin-only,
+body.is-admin li.hr-only,
+body.is-admin li.staff-only,
+body.is-hr li.hr-only,
+body.is-hr li.staff-only,
+body.is-staff li.staff-only {
+  display: list-item !important;
 }
 
 /* Notification Dropdown */

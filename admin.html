@@ -184,7 +184,6 @@
               <span class="bg-orange-500 text-white text-[10px] px-2 py-0.5 rounded-full" id="task-count">0</span>
             </a></li>
             <li class="staff-only"><a href="#" id="nav-streaks"><i class="fas fa-bolt"></i> Streaks</a></li>
-            <li><a href="#" id="nav-chat"><i class="far fa-comment-dots"></i> Chat</a></li>
             <li><a href="#" id="nav-announcements"><i class="fas fa-bullhorn"></i> Announcements</a></li>
             <li class="staff-only"><a href="#" id="nav-recognition"><i class="fas fa-trophy"></i> Recognition</a></li>
             <li><a href="#" id="nav-send-email"><i class="far fa-envelope"></i> Send Email</a></li>
@@ -198,8 +197,8 @@
             </li>
             <li class="admin-only"><a href="#" id="nav-bookings"><i class="fas fa-calendar-alt"></i> Bookings</a></li>
             <li class="admin-only"><a href="#" id="nav-messages"><i class="fas fa-envelope"></i> Messages</a></li>
-            <li class="admin-only"><a href="#" id="nav-staff"><i class="fas fa-users"></i> Staff Members</a></li>
-            <li class="admin-only"><a href="#" id="nav-assign-task"><i class="fas fa-clipboard-list"></i> Assign Tasks</a></li>
+            <li class="admin-only hr-only"><a href="#" id="nav-staff"><i class="fas fa-users"></i> Staff Members</a></li>
+            <li class="admin-only hr-only"><a href="#" id="nav-assign-task"><i class="fas fa-clipboard-list"></i> Assign Tasks</a></li>
             <li class="admin-only"><a href="#" id="nav-blogs"><i class="fas fa-newspaper"></i> Manage Blogs</a></li>
           </ul>
         </nav>
@@ -305,12 +304,12 @@
             <div class="stat-value" id="new-messages-stat">0</div>
             <span class="text-blue-400 text-xs font-bold">Unread</span>
           </div>
-          <div class="stat-card glass admin-only">
+          <div class="stat-card glass admin-only hr-only">
             <span class="text-slate-400 text-sm uppercase tracking-widest font-bold">Team Attendance</span>
             <div class="stat-value" id="team-attendance-stat">0/0</div>
             <span class="text-cyan-400 text-xs font-bold" id="attendance-detail-stat">Staff members clocked in</span>
           </div>
-          <div class="stat-card glass admin-only">
+          <div class="stat-card glass admin-only hr-only">
             <span class="text-slate-400 text-sm uppercase tracking-widest font-bold">Pending Tasks</span>
             <div class="stat-value" id="pending-tasks-stat">0</div>
             <span class="text-orange-400 text-xs font-bold" id="tasks-detail-stat">Assigned to team members</span>
@@ -975,87 +974,6 @@
         </div>
       </section>
 
-      <!-- Chat Section -->
-      <section id="chat-view" class="hidden h-full">
-        <div class="chat-container-wa border border-white/10 overflow-hidden rounded-xl shadow-2xl">
-          <!-- Sidebar: Contact List -->
-          <div id="chat-sidebar" class="chat-sidebar-wa">
-            <div class="p-4 bg-[#202c33] flex items-center justify-between border-b border-black/10">
-              <div id="my-chat-avatar" class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">A</div>
-              <div class="flex gap-4 text-slate-400">
-                <i class="fas fa-circle-notch cursor-pointer hover:text-white"></i>
-                <i class="fas fa-comment shadow-sm cursor-pointer hover:text-white"></i>
-                <i class="fas fa-ellipsis-v cursor-pointer hover:text-white"></i>
-              </div>
-            </div>
-            <div class="p-2">
-              <div class="relative bg-[#202c33] rounded-lg px-3 py-1 flex items-center gap-3">
-                <i class="fas fa-search text-xs text-slate-500"></i>
-                <input type="text" placeholder="Search or start new chat" class="bg-transparent border-none text-xs text-white outline-none w-full py-1">
-              </div>
-            </div>
-            <div id="chat-contact-list" class="flex-1 overflow-y-auto scrollbar-thin">
-              <!-- Contact list will be populated here -->
-              <div class="text-center py-8 text-slate-500 text-xs italic">Loading contacts...</div>
-            </div>
-            <div class="p-4 text-center border-t border-[#202c33] shrink-0">
-              <p class="text-[10px] text-slate-500 flex items-center justify-center gap-1">
-                <i class="fas fa-lock text-[8px]"></i> End-to-end encrypted
-              </p>
-            </div>
-          </div>
-
-          <!-- Main Chat Area -->
-          <div class="chat-main-wa">
-            <!-- Chat Header -->
-            <div class="chat-header-wa">
-              <button id="chat-back-btn" class="back-btn-wa text-cyan-400 text-xl mr-2">
-                <i class="fas fa-arrow-left"></i>
-              </button>
-              <div id="active-chat-avatar" class="w-10 h-10 rounded-full bg-cyan-500 flex items-center justify-center text-black font-bold">G</div>
-              <div class="flex-1">
-                <h3 id="active-chat-name" class="font-bold text-white text-sm">Global Chat</h3>
-                <p id="active-chat-status" class="text-[10px] text-cyan-400">Public Channel</p>
-              </div>
-              <div class="flex gap-5 text-slate-400">
-                <i class="fas fa-search cursor-pointer hover:text-white"></i>
-                <i class="fas fa-ellipsis-v cursor-pointer hover:text-white"></i>
-              </div>
-            </div>
-            
-            <!-- Chat Messages -->
-            <div id="chat-messages" class="chat-messages-wa scrollbar-thin">
-              <!-- Content will be populated by JS -->
-            </div>
-
-            <!-- Typing Indicator -->
-            <div id="typing-indicator" class="px-6 py-1 h-6 hidden z-10">
-              <p class="text-[10px] text-emerald-400 italic">Someone is typing...</p>
-            </div>
-
-            <!-- Chat Input -->
-            <div class="chat-input-wa">
-              <div class="flex gap-4 text-slate-400 text-lg">
-                <i class="far fa-smile cursor-pointer hover:text-white"></i>
-                <i class="fas fa-paperclip cursor-pointer hover:text-white"></i>
-              </div>
-              <form id="team-chat-form" class="flex-1 flex items-center gap-3">
-                <input type="text" id="chat-input" placeholder="Type a message" required 
-                  class="flex-1 bg-[#2a3942] border-none text-white rounded-lg px-4 py-2 outline-none text-sm placeholder:text-slate-500">
-                <button type="submit" class="text-slate-400 hover:text-cyan-400 text-xl transition-colors">
-                  <i class="fas fa-paper-plane"></i>
-                </button>
-              </form>
-              <div class="text-slate-400 text-xl">
-                <i class="fas fa-microphone cursor-pointer hover:text-white"></i>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="encrypted-notice mt-4">
-          <i class="fas fa-lock text-xs"></i> Your messages are end-to-end encrypted. Lumina Tech cannot read your conversations.
-        </div>
-      </section>
 
       <!-- Announcements Section -->
       <section id="announcements-view" class="hidden">

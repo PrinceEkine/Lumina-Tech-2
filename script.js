@@ -397,21 +397,28 @@ try {
           // Final UI Role Visibility
           document.body.classList.remove('is-admin', 'is-hr', 'is-staff');
           
-          // Force Assistant CEO display
-          if (userRole === 'Assistant CEO' || userRole === 'Ass CEO') {
+          // Normalized role for comparison (trim and lowercase for robustness)
+          let rawRole = (userRole || 'Staff').toString().trim();
+          let normalizedRole = rawRole;
+          
+          // Force Assistant CEO display/logic
+          if (normalizedRole === 'Assistant CEO' || normalizedRole === 'Ass CEO') {
+            normalizedRole = 'Assistant CEO';
             userRole = 'Assistant CEO';
           }
           
-          if (userRole === 'Admin' || userRole === 'CEO' || userRole === 'Assistant CEO' || userRole === 'Ass CEO') {
+          const adminRoles = ['Admin', 'CEO', 'Assistant CEO'];
+          
+          if (adminRoles.includes(normalizedRole)) {
             document.body.classList.add('is-admin');
-          } else if (userRole === 'HR') {
+          } else if (normalizedRole === 'HR') {
             document.body.classList.add('is-hr');
           } else {
             document.body.classList.add('is-staff');
           }
 
           // Force local storage admin state for consistency
-          if (userRole === 'Admin' || userRole === 'CEO' || userRole === 'Assistant CEO') {
+          if (adminRoles.includes(normalizedRole)) {
              localStorage.setItem('isAdminSession', 'true');
           } else {
              localStorage.setItem('isAdminSession', 'false');
@@ -465,20 +472,6 @@ try {
   });
 } catch (err) { console.error("Firebase auth listener failed:", err); }
 
-// Chat Widget
-const chatBtn = document.getElementById('chat-btn');
-const chatWidget = document.getElementById('chat-widget');
-const chatClose = document.getElementById('chat-close');
-
-if (chatBtn && chatWidget && chatClose) {
-  chatBtn.addEventListener('click', () => {
-    chatWidget.classList.toggle('show');
-  });
-
-  chatClose.addEventListener('click', () => {
-    chatWidget.classList.remove('show');
-  });
-}
 
 // Add Staff Modal (Admin Portal)
 const addStaffBtn = document.getElementById('add-staff-btn');
@@ -758,7 +751,6 @@ const navMyTasks = document.getElementById('nav-my-tasks');
 const navAssignTask = document.getElementById('nav-assign-task');
 const navAttendance = document.getElementById('nav-attendance');
 const navStreaks = document.getElementById('nav-streaks');
-const navChat = document.getElementById('nav-chat');
 const navAnnouncements = document.getElementById('nav-announcements');
 const navRecognition = document.getElementById('nav-recognition');
 const navSendEmail = document.getElementById('nav-send-email');
@@ -773,7 +765,6 @@ const staffView = document.getElementById('staff-view');
 const settingsView = document.getElementById('settings-view');
 const myTasksView = document.getElementById('my-tasks-view');
 const assignTaskView = document.getElementById('assign-task-view');
-const chatView = document.getElementById('chat-view');
 const announcementsView = document.getElementById('announcements-view');
 const sendEmailView = document.getElementById('send-email-view');
 const mediaView = document.getElementById('media-view');
@@ -783,8 +774,8 @@ const recognitionView = document.getElementById('recognition-view');
 const leaveView = document.getElementById('leave-view');
 const blogsView = document.getElementById('blogs-view');
 
-const views = [dashboardView, bookingsView, messagesView, staffView, settingsView, myTasksView, assignTaskView, chatView, announcementsView, sendEmailView, mediaView, attendanceView, streaksView, recognitionView, leaveView, blogsView];
-const navs = [navDashboard, navBookings, navMessages, navStaff, navSettings, navMyTasks, navAssignTask, navAttendance, navStreaks, navChat, navAnnouncements, navRecognition, navSendEmail, navMedia, navLeave, navBlogs];
+const views = [dashboardView, bookingsView, messagesView, staffView, settingsView, myTasksView, assignTaskView, announcementsView, sendEmailView, mediaView, attendanceView, streaksView, recognitionView, leaveView, blogsView];
+const navs = [navDashboard, navBookings, navMessages, navStaff, navSettings, navMyTasks, navAssignTask, navAttendance, navStreaks, navAnnouncements, navRecognition, navSendEmail, navMedia, navLeave, navBlogs];
 
 function showView(viewToShow, activeNav) {
   views.forEach(v => v?.classList.add('hidden'));
@@ -850,10 +841,12 @@ setupNavLink(navMessages, messagesView, fetchMessages);
 setupNavLink(navStaff, staffView, fetchStaff);
 setupNavLink(navSettings, settingsView);
 setupNavLink(navMyTasks, myTasksView, fetchMyTasks);
-setupNavLink(navAssignTask, assignTaskView, fetchStaffForDropdown);
+setupNavLink(navAssignTask, assignTaskView, () => {
+    fetchStaffForDropdown();
+    fetchAdminTasks();
+});
 setupNavLink(navAttendance, attendanceView, fetchAttendance);
 setupNavLink(navStreaks, streaksView, fetchStreaks);
-setupNavLink(navChat, chatView, fetchChatContacts);
 setupNavLink(navAnnouncements, announcementsView, fetchAnnouncements);
 setupNavLink(navRecognition, recognitionView, fetchRecognition);
 setupNavLink(navSendEmail, sendEmailView);
@@ -861,265 +854,7 @@ setupNavLink(navMedia, mediaView, fetchMedia);
 setupNavLink(navLeave, leaveView, fetchLeaveRequests);
 setupNavLink(navBlogs, blogsView, fetchAdminBlogs);
 
-// --- TEAM CHAT LOGIC ---
-const teamChatForm = document.getElementById('team-chat-form');
-const chatMessages = document.getElementById('chat-messages');
-const chatInput = document.getElementById('chat-input');
-const chatContactList = document.getElementById('chat-contact-list');
-const activeChatAvatar = document.getElementById('active-chat-avatar');
-const activeChatName = document.getElementById('active-chat-name');
-const activeChatStatus = document.getElementById('active-chat-status');
-
-let activeRecipient = 'global'; // 'global' or staff user ID
-
-async function fetchChatContacts() {
-  if (!chatContactList) return;
-  
-  try {
-    const q = query(collection(db, 'users'), where('role', '!=', 'Client'), orderBy('name'));
-    const snapshot = await getDocs(q);
-    const staff = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-
-    const myId = auth.currentUser?.uid;
-
-    // Keep the Global Chat item
-    const globalItemHtml = `
-      <div class="contact-wa ${activeRecipient === 'global' ? 'active' : ''} chat-contact" data-recipient="global">
-        <div class="w-12 h-12 rounded-full bg-[#00a884] flex items-center justify-center text-white font-bold text-lg">G</div>
-        <div class="flex-1 min-w-0">
-          <div class="flex justify-between items-center mb-0.5">
-            <p class="text-sm font-bold text-white truncate">Global Chat</p>
-          </div>
-          <p class="text-xs text-slate-400 truncate">Team announcement channel</p>
-        </div>
-      </div>
-    `;
-
-    chatContactList.innerHTML = globalItemHtml;
-
-    if (staff.length <= (staff.some(s => s.id === myId) ? 1 : 0)) {
-      const emptyMsg = document.createElement('div');
-      emptyMsg.className = 'p-8 text-center text-slate-500 text-xs italic';
-      emptyMsg.innerText = 'No other team members found.';
-      chatContactList.appendChild(emptyMsg);
-    }
-
-    staff.forEach(person => {
-      if (person.id === auth.currentUser?.uid) return;
-
-      const contactDiv = document.createElement('div');
-      contactDiv.className = `contact-wa ${activeRecipient === person.id ? 'active' : ''} chat-contact transition-all duration-300`;
-      contactDiv.dataset.recipient = person.id;
-      contactDiv.dataset.name = person.name;
-      contactDiv.dataset.role = person.role;
-      
-      const initials = (person.name || 'U').charAt(0);
-      contactDiv.innerHTML = `
-        <div class="w-12 h-12 rounded-full overflow-hidden bg-slate-700 flex items-center justify-center text-white font-bold text-lg">
-          ${person.photo_url ? `<img src="${person.photo_url}" class="w-full h-full object-cover">` : initials}
-        </div>
-        <div class="flex-1 min-w-0">
-          <div class="flex justify-between items-center mb-0.5">
-            <p class="text-sm font-bold text-white truncate">${person.name || 'Unknown'}</p>
-          </div>
-          <p class="text-xs text-slate-400 truncate">${person.role || 'Staff'}</p>
-        </div>
-      `;
-      
-      contactDiv.addEventListener('click', () => {
-        activeRecipient = person.id;
-        activeChatName.innerText = person.name;
-        activeChatAvatar.innerText = person.name.charAt(0);
-        activeChatAvatar.className = 'w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold text-lg';
-        activeChatStatus.innerText = person.role;
-        activeChatStatus.className = 'text-[10px] text-slate-400';
-        
-        document.querySelectorAll('.chat-contact').forEach(c => c.classList.remove('active'));
-        contactDiv.classList.add('active');
-        
-        // Mobile view switch
-        const chatSidebarWA = document.querySelector('.chat-sidebar-wa');
-        if (chatSidebarWA) chatSidebarWA.classList.add('hidden-mobile');
-        
-        fetchChatMessages();
-      });
-
-      chatContactList.appendChild(contactDiv);
-    });
-
-    const globalBtn = chatContactList.querySelector('[data-recipient="global"]');
-    if (globalBtn) {
-      globalBtn.addEventListener('click', () => {
-        activeRecipient = 'global';
-        activeChatName.innerText = 'Global Chat';
-        activeChatAvatar.innerText = 'G';
-        activeChatAvatar.className = 'w-10 h-10 rounded-full bg-[#00a884] flex items-center justify-center text-white font-bold text-lg';
-        activeChatStatus.innerText = 'Public Channel';
-        activeChatStatus.className = 'text-[10px] text-cyan-400';
-        
-        document.querySelectorAll('.chat-contact').forEach(c => c.classList.remove('active'));
-        globalBtn.classList.add('active');
-        
-        // Mobile view switch
-        const chatSidebarWA = document.querySelector('.chat-sidebar-wa');
-        if (chatSidebarWA) chatSidebarWA.classList.add('hidden-mobile');
-        
-        fetchChatMessages();
-      });
-    }
-
-    // Chat Back Button for Mobile
-    const chatBackBtn = document.getElementById('chat-back-btn');
-    if (chatBackBtn) {
-      chatBackBtn.addEventListener('click', () => {
-        const chatSidebarWA = document.querySelector('.chat-sidebar-wa');
-        if (chatSidebarWA) chatSidebarWA.classList.remove('hidden-mobile');
-      });
-    }
-
-  } catch (err) {
-    console.error("Error fetching contacts:", err);
-  }
-}
-
-let unsubscribeChat = null;
-async function fetchChatMessages() {
-  if (!chatMessages) return;
-  if (unsubscribeChat) unsubscribeChat();
-
-  const user = auth.currentUser;
-  if (!user) return;
-  
-  const currentMyId = user.uid;
-  let q;
-
-  if (activeRecipient === 'global') {
-    q = query(
-      collection(db, 'messages'),
-      where('recipient_id', '==', 'global'),
-      orderBy('created_at', 'asc')
-    );
-  } else {
-    // Simplified query to avoid index requirements for now
-    q = query(
-      collection(db, 'messages'),
-      orderBy('created_at', 'asc')
-    );
-  }
-
-  const handleSnapshot = (snapshot) => {
-    chatMessages.innerHTML = '';
-    const allMsgs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-    
-    let filteredMsgs = [];
-    if (activeRecipient === 'global') {
-      filteredMsgs = allMsgs.filter(m => m.recipient_id === 'global');
-    } else {
-      filteredMsgs = allMsgs.filter(m => 
-        (m.sender_id === currentMyId && m.recipient_id === activeRecipient) ||
-        (m.sender_id === activeRecipient && m.recipient_id === currentMyId)
-      );
-    }
-    
-    // Manual sort by date
-    filteredMsgs.sort((a, b) => {
-      const dateA = a.created_at?.toDate ? a.created_at.toDate() : new Date(a.created_at || Date.now());
-      const dateB = b.created_at?.toDate ? b.created_at.toDate() : new Date(b.created_at || Date.now());
-      return dateA - dateB;
-    });
-    
-    if (filteredMsgs.length === 0) {
-      chatMessages.innerHTML = `
-        <div class="flex flex-col items-center justify-center h-full gap-4 text-center opacity-40">
-          <div class="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-3xl">
-            <i class="fas fa-comment-slash"></i>
-          </div>
-          <p class="text-xs">No messages with ${activeChatName.innerText} yet.</p>
-        </div>`;
-    } else {
-      filteredMsgs.forEach(msg => {
-        const isMe = msg.sender_id === currentMyId;
-        const msgDiv = document.createElement('div');
-        msgDiv.className = `msg-wa ${isMe ? 'outgoing' : 'incoming'}`;
-        
-        const isRead = msg.status === 'read';
-        const statusHtml = isMe && activeRecipient !== 'global' ? `
-          <span class="status-icon ${isRead ? 'text-cyan-400' : 'text-slate-500'}">
-            <i class="fas ${isRead ? 'fa-check-double' : 'fa-check'}"></i>
-          </span>` : '';
-
-        const date = msg.created_at?.toDate ? msg.created_at.toDate() : new Date();
-        const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        
-        msgDiv.innerHTML = `
-          ${activeRecipient === 'global' && !isMe ? `<p class="text-[10px] font-bold text-cyan-400 mb-0.5">${msg.sender_name}</p>` : ''}
-          <div class="flex flex-col">
-            <span class="text-sm">${msg.content || msg.message}</span>
-            <span class="time">${timeStr}${statusHtml}</span>
-          </div>
-        `;
-        chatMessages.appendChild(msgDiv);
-
-        if (!isMe && activeRecipient !== 'global' && msg.status !== 'read') {
-          updateDoc(doc(db, 'messages', msg.id), { status: 'read' });
-        }
-      });
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-  };
-
-  try {
-    unsubscribeChat = onSnapshot(q, handleSnapshot, (err) => {
-      console.warn("Chat index error, falling back:", err);
-      const fallbackQ = query(collection(db, 'messages'));
-      unsubscribeChat = onSnapshot(fallbackQ, handleSnapshot, (err2) => {
-        console.error("Chat total failure:", err2);
-      });
-    });
-  } catch (err) {
-    console.error("Chat setup error:", err);
-  }
-}
-
-if (teamChatForm) {
-  teamChatForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const content = chatInput.value.trim();
-    if (!content) return;
-
-    const submitBtn = teamChatForm.querySelector('button[type="submit"]');
-    const originalBtnHtml = submitBtn.innerHTML;
-
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error("Log in to send messages");
-      
-      submitBtn.disabled = true;
-      submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-      const isAdminFlag = localStorage.getItem('isAdminSession') === 'true';
-      const senderName = isAdminFlag ? 'Admin' : (user.displayName || user.email.split('@')[0]);
-
-      await addDoc(collection(db, 'messages'), {
-        sender_id: user.uid,
-        sender_name: senderName,
-        recipient_id: activeRecipient,
-        content: content,
-        created_at: serverTimestamp(),
-        status: 'sent'
-      });
-
-      chatInput.value = '';
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = originalBtnHtml;
-    } catch (err) {
-      console.error("Error sending message:", err);
-      showToast("Failed to send message.", "error");
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = originalBtnHtml;
-    }
-  });
-}
+// --- TEAM CHAT LOGIC REMOVED ---
 
 // --- ANNOUNCEMENTS LOGIC ---
 const announcementsList = document.getElementById('announcements-list');
@@ -1531,7 +1266,7 @@ async function fetchLeaveRequests() {
         <td data-label="Type">${leave.type}</td>
         <td data-label="Dates">${startDateVal} to ${endDateVal}</td>
         <td data-label="Duration">${days} ${days === '--' ? '' : 'Days'}</td>
-        <td data-label="Reason" class="max-w-[150px] truncate" title="${reasonVal}">${reasonVal}</td>
+        <td data-label="Reason" class="leading-relaxed whitespace-pre-wrap" title="${reasonVal}">${reasonVal}</td>
         <td data-label="Status"><span class="status-badge ${leave.status === 'Approved' ? 'status-completed' : leave.status === 'Rejected' ? 'status-cancelled' : 'status-pending'}">${leave.status}</span></td>
         <td data-label="Action">${leave.status === 'Pending' ? `<button onclick="cancelLeave('${leave.id}')" class="text-red-400 hover:text-red-500"><i class="fas fa-times"></i></button>` : '--'}</td>
       `;
@@ -1553,7 +1288,7 @@ async function fetchLeaveRequests() {
           <td data-label="Staff Name">${leave.staff_name}</td>
           <td data-label="Type">${leave.type}</td>
           <td data-label="Dates">${leave.start_date} to ${leave.end_date}</td>
-          <td data-label="Reason" class="max-w-xs truncate">${leave.reason}</td>
+          <td data-label="Reason" class="max-w-xs leading-relaxed whitespace-pre-wrap">${leave.reason}</td>
           <td data-label="Status"><span class="status-badge ${leave.status === 'Approved' ? 'status-completed' : leave.status === 'Rejected' ? 'status-cancelled' : 'status-pending'}">${leave.status}</span></td>
           <td data-label="Action">
             ${leave.status === 'Pending' ? `
@@ -1824,36 +1559,55 @@ if (assignTaskForm) {
     const originalText = submitBtn.innerText;
 
     const assigneeSelect = document.getElementById('task-assignee');
-    const assigneeId = assigneeSelect ? assigneeSelect.value : '';
+    let assigneeId = '';
+    if (assigneeSelect && assigneeSelect.selectedIndex > 0) {
+      assigneeId = assigneeSelect.options[assigneeSelect.selectedIndex].value;
+    }
     
     if (!assigneeId || assigneeId === "" || assigneeId === "null") {
-      showToast('Please select a valid staff member from the list.', 'warning');
-      if (assigneeSelect) assigneeSelect.focus();
+      showToast('Please select a valid staff member to assign this task to.', 'warning');
+      if (assigneeSelect) {
+        assigneeSelect.focus();
+        assigneeSelect.style.borderColor = '#ef4444'; // Red-500
+      }
       return;
     }
+    if (assigneeSelect) assigneeSelect.style.borderColor = '';
 
     const taskTitleEl = document.getElementById('task-title');
     const taskTitle = taskTitleEl ? taskTitleEl.value.trim() : '';
     if (!taskTitle) {
       showToast('Task title is required.', 'warning');
-      if (taskTitleEl) taskTitleEl.focus();
+      if (taskTitleEl) {
+        taskTitleEl.focus();
+        taskTitleEl.style.borderColor = '#ef4444';
+      }
       return;
     }
+    if (taskTitleEl) taskTitleEl.style.borderColor = '';
     
-    const taskDueDate = document.getElementById('task-due-date').value;
+    const taskDueDateEl = document.getElementById('task-due-date');
+    const taskDueDate = taskDueDateEl ? taskDueDateEl.value : '';
     if (!taskDueDate) {
       showToast('Due date is required.', 'warning');
-      document.getElementById('task-due-date').focus();
+      if (taskDueDateEl) {
+        taskDueDateEl.focus();
+        taskDueDateEl.style.borderColor = '#ef4444';
+      }
       return;
     }
+    if (taskDueDateEl) taskDueDateEl.style.borderColor = '';
 
     setLoading(submitBtn, true, 'Assigning...');
 
     try {
       const user = auth.currentUser;
+      const assigneeName = assigneeSelect.options[assigneeSelect.selectedIndex].text;
+      
       const taskData = {
         title: taskTitle,
         assignee_id: assigneeId,
+        assignee_name: assigneeName,
         category: document.getElementById('task-category').value,
         priority: document.getElementById('task-priority').value,
         due_date: document.getElementById('task-due-date').value,
@@ -3176,7 +2930,7 @@ async function fetchNotifications() {
           <p class="text-sm font-semibold">${notif.title}</p>
           <span class="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold">${notif.tag || 'Info'}</span>
         </div>
-        <p class="text-xs text-slate-400">${notif.message}</p>
+        <p class="text-xs text-slate-400 whitespace-pre-wrap leading-relaxed">${notif.message}</p>
         <span class="text-[10px] text-slate-500 mt-1 block">${createdAt.toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</span>
       `;
       
@@ -3268,7 +3022,7 @@ async function showTaskDetails(taskId) {
       <div class="mb-8">
         <h4 class="text-sm font-bold text-slate-400 uppercase mb-4 tracking-widest">Description</h4>
         <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 min-h-[100px]">
-          <p class="text-slate-200 leading-relaxed">${task.description || 'No description provided.'}</p>
+          <p class="text-slate-200 leading-relaxed whitespace-pre-wrap">${task.description || 'No description provided.'}</p>
         </div>
       </div>
       
