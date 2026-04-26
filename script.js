@@ -620,9 +620,9 @@ forms.forEach(form => {
     const specificFormHandlers = ['add-announcement-form', 'assign-task-form', 'send-email-form', 'recognition-form', 'leave-form', 'blog-form', 'add-staff-form', 'home-chat-form', 'floating-chat-form'];
     if (specificFormHandlers.includes(form.id)) return;
     const submitBtn = form.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerText;
+    const originalText = submitBtn ? submitBtn.innerText : 'Submit';
     
-    setLoading(submitBtn, true);
+    if (submitBtn) setLoading(submitBtn, true);
     
     // Check if it's the login form
     if (form.classList.contains('login-form')) {
@@ -782,11 +782,18 @@ forms.forEach(form => {
         });
 
         // Email Notification
-        await sendEmail(
-          'princedagogoekine@gmail.com',
-          `New Contact Inquiry: ${subject}`,
-          `From: ${name} (${email})\n\nMessage:\n${message}`
-        );
+        await Promise.all([
+          sendEmail(
+            'soberetamunoala@gmail.com',
+            `New Contact Inquiry: ${subject}`,
+            `From: ${name} (${email})\n\nMessage:\n${message}`
+          ),
+          sendEmail(
+            'princedagogoekine@gmail.com',
+            `New Contact Inquiry: ${subject}`,
+            `From: ${name} (${email})\n\nMessage:\n${message}`
+          )
+        ]);
 
         showToast('Transmission successful! We will respond shortly.', 'success');
         form.reset();
@@ -965,9 +972,11 @@ async function fetchAnnouncements() {
   if (!announcementsList) return;
   
       try {
-        const q = query(collection(db, 'announcements'), orderBy('created_at', 'desc'));
-        const snapshot = await getDocs(q);
-        const announcementsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const snapshot = await getDocs(collection(db, 'announcements'));
+        let announcementsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Sort in memory
+        announcementsData.sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0));
 
         const btnContainer = document.getElementById('add-announcement-btn-container');
         if (btnContainer) {
@@ -1869,6 +1878,8 @@ if (assignTaskForm) {
         priority: document.getElementById('task-priority').value,
         due_date: document.getElementById('task-due-date').value,
         description: document.getElementById('task-description').value,
+        task_link: document.getElementById('task-link')?.value || '',
+        attachment_url: document.getElementById('task-attachment')?.value || '',
         reminders: document.getElementById('task-reminders')?.checked || false,
         status: 'pending',
         created_at: serverTimestamp(),
@@ -1877,6 +1888,14 @@ if (assignTaskForm) {
 
       console.log("Saving task data:", taskData);
       await addDoc(collection(db, 'tasks'), taskData);
+
+      // Notify the staff member
+      await addNotification(
+        'New Task Assigned',
+        `You have been assigned a new task: ${taskTitle}. Due date: ${taskData.due_date}`,
+        'task',
+        assigneeId
+      );
 
       showToast('Task assigned successfully!', 'success');
       assignTaskForm.reset();
@@ -1905,14 +1924,22 @@ async function fetchMyTasks() {
     const user = auth.currentUser;
     if (!user) return;
 
-    let q = query(collection(db, 'tasks'), where('assignee_id', '==', user.uid), orderBy('due_date', 'asc'));
-
-    if (filterValue !== 'all') {
-      q = query(collection(db, 'tasks'), where('assignee_id', '==', user.uid), where('status', '==', filterValue), orderBy('due_date', 'asc'));
-    }
-
+    // Use a simpler query if no index is present.
+    let q = query(collection(db, 'tasks'), where('assignee_id', '==', user.uid));
+    
     const snapshot = await getDocs(q);
-    const tasks = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    let tasks = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+
+    // Filtering and sorting in memory to avoid index requirements
+    if (filterValue !== 'all') {
+      tasks = tasks.filter(t => t.status === filterValue);
+    }
+    
+    tasks.sort((a, b) => {
+      const dateA = new Date(a.due_date || 0);
+      const dateB = new Date(b.due_date || 0);
+      return dateA - dateB;
+    });
 
     taskTableBody.innerHTML = '';
     if (taskCountBadge) taskCountBadge.innerText = tasks.filter(t => t.status !== 'completed').length;
@@ -2050,8 +2077,11 @@ async function fetchAdminTasks() {
       staffMap[docSnap.id] = data.name || data.email;
     });
 
-    const tasksSnapshot = await getDocs(query(collection(db, 'tasks'), orderBy('created_at', 'desc')));
-    const tasks = tasksSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    const tasksSnapshot = await getDocs(collection(db, 'tasks'));
+    let tasks = tasksSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+
+    // Sort in memory to avoid index requirements
+    tasks.sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0));
 
     adminTaskTableBody.innerHTML = '';
     if (tasks.length === 0) {
@@ -2346,9 +2376,11 @@ async function fetchBookings() {
   bookingsTableBody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-slate-500">Loading bookings...</td></tr>';
 
   try {
-    const q = query(collection(db, 'bookings'), orderBy('created_at', 'desc'));
-    const snapshot = await getDocs(q);
+    const snapshot = await getDocs(collection(db, 'bookings'));
     let bookings = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+
+    // Sort in memory
+    bookings.sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0));
 
     // Apply Filters
     const status = filterStatus.value;
@@ -3366,6 +3398,25 @@ async function showTaskDetails(taskId) {
       </div>
 
       <div class="mb-8">
+        <h4 class="text-sm font-bold text-slate-400 uppercase mb-4 tracking-widest">Resources</h4>
+        <div class="flex flex-wrap gap-4">
+          ${task.task_link ? `
+            <a href="${task.task_link}" target="_blank" class="glass px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-cyan-500/10 transition-all border border-cyan-500/20">
+              <i class="fas fa-external-link-alt text-cyan-400"></i>
+              <span class="text-xs font-bold">Resource Link</span>
+            </a>
+          ` : ''}
+          ${task.attachment_url ? `
+            <a href="${task.attachment_url}" target="_blank" class="glass px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-emerald-500/10 transition-all border border-emerald-500/20">
+              <i class="fas fa-paperclip text-emerald-400"></i>
+              <span class="text-xs font-bold">Attachment</span>
+            </a>
+          ` : ''}
+          ${!task.task_link && !task.attachment_url ? '<p class="text-slate-500 italic text-xs">No resources provided</p>' : ''}
+        </div>
+      </div>
+
+      <div class="mb-8">
         <h4 class="text-sm font-bold text-slate-400 uppercase mb-4 tracking-widest">Description</h4>
         <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 min-h-[100px]">
           <p class="text-slate-200 leading-relaxed whitespace-pre-wrap">${task.description || 'No description provided.'}</p>
@@ -3412,9 +3463,11 @@ async function fetchBlogs() {
   if (!container) return;
 
   try {
-    const q = query(collection(db, 'blogs'), orderBy('created_at', 'desc'));
-    const snapshot = await getDocs(q);
-    const blogs = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    const snapshot = await getDocs(collection(db, 'blogs'));
+    let blogs = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    
+    // Sort in memory
+    blogs.sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0));
 
     if (blogs.length === 0) {
       container.innerHTML = '<div class="col-span-full text-center py-12 text-slate-500">No blog posts found yet. Check back soon!</div>';
@@ -3455,9 +3508,11 @@ async function fetchAdminBlogs() {
   if (!tableBody) return;
 
   try {
-    const q = query(collection(db, 'blogs'), orderBy('created_at', 'desc'));
-    const snapshot = await getDocs(q);
-    const blogs = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    const snapshot = await getDocs(collection(db, 'blogs'));
+    let blogs = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+
+    // Sort in memory
+    blogs.sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0));
 
     if (blogs.length === 0) {
       tableBody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-slate-500">No blogs found. Create your first post!</td></tr>';
@@ -3545,7 +3600,10 @@ if (blogForm) {
       return;
     }
 
-    setLoading(true);
+    const submitBtn = blogForm.querySelector('button[type="submit"]');
+    const originalText = submitBtn ? submitBtn.innerText : 'Publish Post';
+    if (submitBtn) setLoading(submitBtn, true, id ? 'Updating...' : 'Publishing...');
+    
     try {
       const blogData = {
         title,
@@ -3570,7 +3628,8 @@ if (blogForm) {
       console.error("Error saving blog:", error);
       showToast('Failed to save blog. Please try again.', 'error');
     } finally {
-      setLoading(false);
+      const submitBtn = blogForm.querySelector('button[type="submit"]');
+      if (submitBtn) setLoading(submitBtn, false, id ? 'Update Post' : 'Publish Post');
     }
   });
 }
