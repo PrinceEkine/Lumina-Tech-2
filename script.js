@@ -996,7 +996,7 @@ async function fetchChatMessages() {
   if (activeRecipient === 'global') {
     q = query(
       collection(db, 'messages'),
-      where('recipient_id', '==', null),
+      where('recipient_id', '==', 'global'),
       orderBy('created_at', 'asc')
     );
   } else {
@@ -1013,7 +1013,7 @@ async function fetchChatMessages() {
     
     let filteredMsgs = [];
     if (activeRecipient === 'global') {
-      filteredMsgs = allMsgs.filter(m => !m.recipient_id);
+      filteredMsgs = allMsgs.filter(m => m.recipient_id === 'global');
     } else {
       filteredMsgs = allMsgs.filter(m => 
         (m.sender_id === currentMyId && m.recipient_id === activeRecipient) ||
@@ -1103,7 +1103,7 @@ if (teamChatForm) {
       await addDoc(collection(db, 'messages'), {
         sender_id: user.uid,
         sender_name: senderName,
-        recipient_id: activeRecipient === 'global' ? null : activeRecipient,
+        recipient_id: activeRecipient,
         content: content,
         created_at: serverTimestamp(),
         status: 'sent'
@@ -1800,7 +1800,7 @@ async function fetchStaffForDropdown() {
     const snapshot = await getDocs(q);
     const staff = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
-    assigneeSelect.innerHTML = '<option value="">Select Staff Member</option>';
+    assigneeSelect.innerHTML = '<option value="" selected disabled>Select Staff Member</option>';
     if (staff && staff.length > 0) {
       staff.forEach(s => {
         const option = document.createElement('option');
@@ -1809,7 +1809,7 @@ async function fetchStaffForDropdown() {
         assigneeSelect.appendChild(option);
       });
     } else {
-      assigneeSelect.innerHTML = '<option value="">No staff found in database</option>';
+      assigneeSelect.innerHTML = '<option value="" disabled>No staff found in database</option>';
     }
   } catch (error) {
     console.error("Error fetching staff for dropdown:", error);
@@ -1824,10 +1824,10 @@ if (assignTaskForm) {
     const originalText = submitBtn.innerText;
 
     const assigneeSelect = document.getElementById('task-assignee');
-    const assigneeId = (assigneeSelect && assigneeSelect.selectedIndex > 0) ? assigneeSelect.value : '';
+    const assigneeId = assigneeSelect ? assigneeSelect.value : '';
     
-    if (!assigneeId) {
-      showToast('Please select a staff member from the list.', 'warning');
+    if (!assigneeId || assigneeId === "" || assigneeId === "null") {
+      showToast('Please select a valid staff member from the list.', 'warning');
       if (assigneeSelect) assigneeSelect.focus();
       return;
     }
@@ -1837,6 +1837,13 @@ if (assignTaskForm) {
     if (!taskTitle) {
       showToast('Task title is required.', 'warning');
       if (taskTitleEl) taskTitleEl.focus();
+      return;
+    }
+    
+    const taskDueDate = document.getElementById('task-due-date').value;
+    if (!taskDueDate) {
+      showToast('Due date is required.', 'warning');
+      document.getElementById('task-due-date').focus();
       return;
     }
 
