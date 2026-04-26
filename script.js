@@ -595,6 +595,10 @@ if (loadMoreBtn && hiddenPosts.length > 0) {
 const forms = document.querySelectorAll('form');
 forms.forEach(form => {
   form.addEventListener('submit', async (e) => {
+    // Skip generic handling for specifically named forms
+    const specificFormHandlers = ['add-announcement-form', 'assign-task-form', 'send-email-form', 'recognition-form', 'leave-form', 'blog-form', 'add-staff-form', 'home-chat-form', 'floating-chat-form'];
+    if (specificFormHandlers.includes(form.id)) return;
+
     e.preventDefault();
     const submitBtn = form.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerText;
@@ -944,7 +948,7 @@ async function fetchAnnouncements() {
       try {
         const q = query(collection(db, 'announcements'), orderBy('created_at', 'desc'));
         const snapshot = await getDocs(q);
-        const data = snapshot.docs.map(doc => doc.data());
+        const announcementsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         const btnContainer = document.getElementById('add-announcement-btn-container');
         if (btnContainer) {
@@ -956,10 +960,10 @@ async function fetchAnnouncements() {
         }
 
         announcementsList.innerHTML = '';
-    if (data.length === 0) {
+    if (announcementsData.length === 0) {
       announcementsList.innerHTML = '<div class="text-center py-12 text-slate-500">No announcements yet</div>';
     } else {
-      data.forEach(ann => {
+      announcementsData.forEach(ann => {
         const annDiv = document.createElement('div');
         annDiv.className = 'glass p-6 border-l-4 border-cyan-500 cursor-pointer hover:bg-white/5 transition-all relative';
         annDiv.onclick = (e) => {
@@ -1635,10 +1639,13 @@ async function fetchStaff() {
   
   console.log("[fetchStaff] Fetching staff members...");
   try {
-    const q = query(collection(db, 'users'), orderBy('name'));
+    const q = query(collection(db, 'users'));
     const snapshot = await getDocs(q);
-    const staffList = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    let staffList = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
     
+    // Manual sort by name since index might be missing or field might be null
+    staffList.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
     // Filter out Clients if they accidentally show up
     const filteredStaff = staffList.filter(s => s.role !== 'Client');
     populateStaffTable(filteredStaff);
@@ -1691,23 +1698,29 @@ async function fetchStaffForDropdown() {
   if (!assigneeSelect) return;
 
   try {
-    const q = query(collection(db, 'users'), orderBy('name'));
+    const q = query(collection(db, 'users'));
     const snapshot = await getDocs(q);
-    const staff = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    let staff = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    
+    // Manual sort
+    staff.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
     assigneeSelect.innerHTML = '<option value="" selected disabled>Select Staff Member</option>';
     if (staff && staff.length > 0) {
       staff.forEach(s => {
-        const option = document.createElement('option');
-        option.value = s.id;
-        option.textContent = s.name;
-        assigneeSelect.appendChild(option);
+        if (s.role !== 'Client') {
+          const option = document.createElement('option');
+          option.value = s.id;
+          option.textContent = s.name || s.email;
+          assigneeSelect.appendChild(option);
+        }
       });
     } else {
-      assigneeSelect.innerHTML = '<option value="" disabled>No staff found in database</option>';
+      assigneeSelect.innerHTML = '<option value="" disabled>No staff members found</option>';
     }
   } catch (error) {
     console.error("Error fetching staff for dropdown:", error);
+    assigneeSelect.innerHTML = '<option value="" disabled>Error loading staff</option>';
   }
 }
 
@@ -1720,19 +1733,22 @@ if (assignTaskForm) {
 
     const assigneeSelect = document.getElementById('task-assignee');
     let assigneeId = '';
-    if (assigneeSelect && assigneeSelect.selectedIndex > 0) {
-      assigneeId = assigneeSelect.options[assigneeSelect.selectedIndex].value;
+    let assigneeName = '';
+    
+    if (assigneeSelect && assigneeSelect.value) {
+      assigneeId = assigneeSelect.value;
+      assigneeName = assigneeSelect.options[assigneeSelect.selectedIndex].text;
     }
     
     if (!assigneeId || assigneeId === "" || assigneeId === "null") {
-      showToast('Please select a valid staff member to assign this task to.', 'warning');
+      showToast('Please select a valid staff member.', 'warning');
       if (assigneeSelect) {
+        assigneeSelect.style.border = '2px solid #ef4444';
         assigneeSelect.focus();
-        assigneeSelect.style.borderColor = '#ef4444'; // Red-500
       }
       return;
     }
-    if (assigneeSelect) assigneeSelect.style.borderColor = '';
+    if (assigneeSelect) assigneeSelect.style.border = '';
 
     const taskTitleEl = document.getElementById('task-title');
     const taskTitle = taskTitleEl ? taskTitleEl.value.trim() : '';
