@@ -394,15 +394,28 @@ try {
           }
         }
         
-        // Final UI Role Visibility
-        document.body.classList.remove('is-admin', 'is-hr', 'is-staff');
-        if (userRole === 'Admin' || userRole === 'CEO' || userRole === 'Assistant CEO' || userRole === 'Ass CEO') {
-          document.body.classList.add('is-admin');
-        } else if (userRole === 'HR') {
-          document.body.classList.add('is-hr');
-        } else {
-          document.body.classList.add('is-staff');
-        }
+          // Final UI Role Visibility
+          document.body.classList.remove('is-admin', 'is-hr', 'is-staff');
+          
+          // Force Assistant CEO display
+          if (userRole === 'Assistant CEO' || userRole === 'Ass CEO') {
+            userRole = 'Assistant CEO';
+          }
+          
+          if (userRole === 'Admin' || userRole === 'CEO' || userRole === 'Assistant CEO' || userRole === 'Ass CEO') {
+            document.body.classList.add('is-admin');
+          } else if (userRole === 'HR') {
+            document.body.classList.add('is-hr');
+          } else {
+            document.body.classList.add('is-staff');
+          }
+
+          // Force local storage admin state for consistency
+          if (userRole === 'Admin' || userRole === 'CEO' || userRole === 'Assistant CEO') {
+             localStorage.setItem('isAdminSession', 'true');
+          } else {
+             localStorage.setItem('isAdminSession', 'false');
+          }
       } catch (err) {
         console.error("Role check failed:", err);
       }
@@ -895,20 +908,21 @@ async function fetchChatContacts() {
       if (person.id === auth.currentUser?.uid) return;
 
       const contactDiv = document.createElement('div');
-      contactDiv.className = `contact-wa ${activeRecipient === person.id ? 'active' : ''} chat-contact`;
+      contactDiv.className = `contact-wa ${activeRecipient === person.id ? 'active' : ''} chat-contact transition-all duration-300`;
       contactDiv.dataset.recipient = person.id;
       contactDiv.dataset.name = person.name;
       contactDiv.dataset.role = person.role;
       
+      const initials = (person.name || 'U').charAt(0);
       contactDiv.innerHTML = `
-        <div class="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold text-lg">
-          ${person.name.charAt(0)}
+        <div class="w-12 h-12 rounded-full overflow-hidden bg-slate-700 flex items-center justify-center text-white font-bold text-lg">
+          ${person.photo_url ? `<img src="${person.photo_url}" class="w-full h-full object-cover">` : initials}
         </div>
         <div class="flex-1 min-w-0">
           <div class="flex justify-between items-center mb-0.5">
-            <p class="text-sm font-bold text-white truncate">${person.name}</p>
+            <p class="text-sm font-bold text-white truncate">${person.name || 'Unknown'}</p>
           </div>
-          <p class="text-xs text-slate-400 truncate">${person.role}</p>
+          <p class="text-xs text-slate-400 truncate">${person.role || 'Staff'}</p>
         </div>
       `;
       
@@ -997,8 +1011,10 @@ async function fetchChatMessages() {
     chatMessages.innerHTML = '';
     const allMsgs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     
-    let filteredMsgs = allMsgs;
-    if (activeRecipient !== 'global') {
+    let filteredMsgs = [];
+    if (activeRecipient === 'global') {
+      filteredMsgs = allMsgs.filter(m => !m.recipient_id);
+    } else {
       filteredMsgs = allMsgs.filter(m => 
         (m.sender_id === currentMyId && m.recipient_id === activeRecipient) ||
         (m.sender_id === activeRecipient && m.recipient_id === currentMyId)
@@ -1155,11 +1171,11 @@ async function fetchAnnouncements() {
 
       // Simple Login Popup for latest announcement
       const latest = data[0];
-      const sessKey = `seen_${latest.created_at?.seconds || latest.title}`;
-      if (!sessionStorage.getItem(sessKey)) {
-        showAnnouncementPopup(latest);
-        sessionStorage.setItem(sessKey, 'true');
-      }
+    const sessKey = `seen_ann_${latest.id || latest.created_at?.seconds || latest.title}`;
+    if (!sessionStorage.getItem(sessKey)) {
+      setTimeout(() => showAnnouncementPopup(latest), 1500);
+      sessionStorage.setItem(sessKey, 'true');
+    }
     }
   } catch (err) {
     console.error("Error fetching announcements:", err);
@@ -1226,8 +1242,9 @@ if (addAnnouncementForm) {
 
     try {
       await addDoc(collection(db, 'announcements'), {
-        title: document.getElementById('announcement-title').value,
-        content: document.getElementById('announcement-content').value,
+        title: document.getElementById('announcement-title').value.trim(),
+        content: document.getElementById('announcement-content').value.trim(),
+        message: document.getElementById('announcement-content').value.trim(), // Support both field names
         author_id: user?.uid || null,
         author_name: authorName,
         created_at: serverTimestamp()
@@ -1564,13 +1581,23 @@ if (leaveForm) {
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       const staffName = userDoc.exists() ? userDoc.data().name : (user.displayName || user.email.split('@')[0]);
 
+      const leaveType = document.getElementById('leave-type').value;
+      const leaveStart = document.getElementById('leave-start-date').value;
+      const leaveEnd = document.getElementById('leave-end-date').value;
+      const leaveReason = document.getElementById('leave-reason').value;
+
+      if (!leaveStart || !leaveEnd || !leaveReason) {
+        showToast('Please fill in all leave details.', 'warning');
+        return;
+      }
+
       await addDoc(collection(db, 'leave_requests'), {
         staff_id: user.uid,
         staff_name: staffName,
-        type: document.getElementById('leave-type').value,
-        start_date: document.getElementById('leave-start-date').value,
-        end_date: document.getElementById('leave-end-date').value,
-        reason: document.getElementById('leave-reason').value,
+        type: leaveType,
+        start_date: leaveStart,
+        end_date: leaveEnd,
+        reason: leaveReason,
         status: 'Pending',
         created_at: serverTimestamp()
       });
@@ -1797,10 +1824,19 @@ if (assignTaskForm) {
     const originalText = submitBtn.innerText;
 
     const assigneeSelect = document.getElementById('task-assignee');
-    const assigneeId = assigneeSelect ? assigneeSelect.value : '';
+    const assigneeId = (assigneeSelect && assigneeSelect.selectedIndex > 0) ? assigneeSelect.value : '';
     
-    if (!assigneeId || assigneeId === "" || assigneeId === "null") {
-      showToast('Please select a staff member from the dropdown list.', 'warning');
+    if (!assigneeId) {
+      showToast('Please select a staff member from the list.', 'warning');
+      if (assigneeSelect) assigneeSelect.focus();
+      return;
+    }
+
+    const taskTitleEl = document.getElementById('task-title');
+    const taskTitle = taskTitleEl ? taskTitleEl.value.trim() : '';
+    if (!taskTitle) {
+      showToast('Task title is required.', 'warning');
+      if (taskTitleEl) taskTitleEl.focus();
       return;
     }
 
@@ -1809,7 +1845,7 @@ if (assignTaskForm) {
     try {
       const user = auth.currentUser;
       const taskData = {
-        title: document.getElementById('task-title').value,
+        title: taskTitle,
         assignee_id: assigneeId,
         category: document.getElementById('task-category').value,
         priority: document.getElementById('task-priority').value,
@@ -1821,6 +1857,7 @@ if (assignTaskForm) {
         created_by: user?.uid || 'Admin'
       };
 
+      console.log("Saving task data:", taskData);
       await addDoc(collection(db, 'tasks'), taskData);
 
       showToast('Task assigned successfully!', 'success');
@@ -1828,9 +1865,8 @@ if (assignTaskForm) {
       
       setTimeout(() => {
         setLoading(submitBtn, false, originalText);
-      }, 2000);
-      
-      fetchAdminTasks(); // Refresh the table
+        fetchAdminTasks(); // Refresh the table after some delay to ensure data is there
+      }, 1000);
     } catch (error) {
       console.error("Error assigning task:", error);
       showToast('Failed to assign task: ' + (error.message || 'Check your database connection'), 'error');
@@ -2780,13 +2816,13 @@ async function fetchAttendance() {
         }
         
         tr.innerHTML = `
-          <td data-label="Staff">${record.staff_name || 'Unknown'}</td>
+          <td data-label="Staff" class="font-bold text-white">${record.staff_name || 'Team Member'}</td>
           <td data-label="Date">${record.date}</td>
-          <td data-label="Clock In">${clockInStr}</td>
-          <td data-label="Clock Out">${clockOut}</td>
+          <td data-label="Clock In" class="text-slate-400 font-mono">${clockInStr}</td>
+          <td data-label="Clock Out" class="text-slate-400 font-mono">${clockOut}</td>
           <td data-label="Status"><span class="status-badge ${record.clock_out ? 'status-completed' : (record.status === 'Late' ? 'bg-orange-500/10 text-orange-400' : 'status-pending')}">${record.status}</span></td>
           <td data-label="Action">
-            <button onclick="deleteAttendanceRecord('${record.id}')" class="text-red-400 hover:text-red-300">
+            <button onclick="deleteAttendanceRecord('${record.id}')" class="text-slate-500 hover:text-red-400 transition-colors">
               <i class="fas fa-trash-alt"></i>
             </button>
           </td>
