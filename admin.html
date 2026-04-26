@@ -1228,6 +1228,28 @@
           </div>
         </div>
       </div>
+      <!-- Task Submission Modal -->
+      <div id="task-submission-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass w-full max-w-md p-8 relative">
+          <button id="close-task-submission-modal" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
+          <h3 class="text-2xl font-bold mb-6">Complete <span class="text-cyan-400">Task</span></h3>
+          <form id="task-submission-form" class="space-y-4">
+            <input type="hidden" id="submission-task-id">
+            <div>
+              <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Explanatory Note / Details</label>
+              <textarea id="submission-notes" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none h-32" placeholder="Describe what was done and provide links if necessary..." required></textarea>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Relevant Links (Github, Drive, etc.)</label>
+              <input type="text" id="submission-link" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none" placeholder="https://...">
+            </div>
+            <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-600 text-black font-bold py-4 rounded-lg transition-all flex items-center justify-center gap-2">
+              <i class="fas fa-paper-plane"></i> Submit for Review
+            </button>
+          </form>
+        </div>
+      </div>
+
       <!-- Camera Modal -->
     </main>
   </div>

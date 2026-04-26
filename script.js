@@ -1154,6 +1154,68 @@ if (addAnnouncementForm) {
   });
 }
 
+const taskSubmissionForm = document.getElementById('task-submission-form');
+const taskSubmissionModal = document.getElementById('task-submission-modal');
+const closeTaskSubmissionModal = document.getElementById('close-task-submission-modal');
+
+if (taskSubmissionForm) {
+  taskSubmissionForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const taskId = document.getElementById('submission-task-id').value;
+    const notes = document.getElementById('submission-notes').value;
+    const link = document.getElementById('submission-link').value;
+    const submitBtn = taskSubmissionForm.querySelector('button[type="submit"]');
+    
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Submitting...';
+    submitBtn.disabled = true;
+
+    try {
+      await updateDoc(doc(db, 'tasks', taskId), {
+        status: 'submitted',
+        submission_notes: notes,
+        submission_link: link,
+        submitted_at: serverTimestamp()
+      });
+
+      showToast('Task submitted for review!', 'success');
+      taskSubmissionModal.classList.add('hidden');
+      taskSubmissionModal.classList.remove('flex');
+      taskSubmissionForm.reset();
+      fetchMyTasks();
+      
+      // Notify admins
+      addNotification(
+        'Task Submitted',
+        `A team member has submitted a task for review.`,
+        'info',
+        'admin' // Assuming 'admin' tag filters for admin users or we handle this in addNotification
+      );
+
+    } catch (err) {
+      console.error("Submission failed:", err);
+      showToast('Submission failed', 'error');
+    } finally {
+      submitBtn.innerHTML = originalText;
+      submitBtn.disabled = false;
+    }
+  });
+}
+
+if (closeTaskSubmissionModal && taskSubmissionModal) {
+  closeTaskSubmissionModal.addEventListener('click', () => {
+    taskSubmissionModal.classList.add('hidden');
+    taskSubmissionModal.classList.remove('flex');
+  });
+  
+  window.addEventListener('click', (e) => {
+    if (e.target === taskSubmissionModal) {
+      taskSubmissionModal.classList.add('hidden');
+      taskSubmissionModal.classList.remove('flex');
+    }
+  });
+}
+
 // --- SEND EMAIL LOGIC ---
 const sendEmailForm = document.getElementById('send-email-form');
 if (sendEmailForm) {
@@ -1841,38 +1903,63 @@ async function fetchMyTasks() {
       return;
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
     tasks.forEach(task => {
       const tr = document.createElement('tr');
       tr.className = 'cursor-pointer hover:bg-white/5 transition-colors';
       tr.onclick = (e) => {
-        if (e.target.tagName !== 'SELECT') showTaskDetails(task.id);
+        if (!e.target.closest('button')) showTaskDetails(task.id);
       };
-      const priorityClass = `priority-${task.priority.toLowerCase()}`;
+      const priority = task.priority || 'Medium';
+      const priorityClass = `priority-${priority.toLowerCase()}`;
       const dueDate = task.due_date ? new Date(task.due_date) : new Date();
       dueDate.setHours(0, 0, 0, 0);
-      const isOverdue = dueDate < today && task.status !== 'completed';
+      
+      const status = task.status || 'pending';
+      const isOverdue = dueDate < today && status !== 'completed';
       
       if (isOverdue) tr.classList.add('overdue-row');
 
+      let actionHtml = '';
+      if (status === 'pending' || status === 'assigned') {
+        actionHtml = `
+          <div class="flex gap-2">
+            <button onclick="handleTaskAction(event, '${task.id}', 'accepted')" class="bg-emerald-500/20 hover:bg-emerald-500 text-emerald-400 hover:text-white px-2 py-1 rounded text-[10px] font-bold transition-all">Accept</button>
+            <button onclick="handleTaskAction(event, '${task.id}', 'declined')" class="bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white px-2 py-1 rounded text-[10px] font-bold transition-all">Decline</button>
+          </div>
+        `;
+      } else if (status === 'accepted' || status === 'in-progress') {
+        actionHtml = `
+          <button onclick="handleOpenCompletionModal(event, '${task.id}')" class="bg-cyan-500 hover:bg-cyan-600 text-black px-3 py-1 rounded text-[10px] font-black uppercase tracking-tighter transition-all">Complete Task</button>
+        `;
+      } else if (status === 'submitted') {
+        actionHtml = `<span class="text-[10px] font-bold text-orange-400 uppercase tracking-widest"><i class="fas fa-clock mr-1"></i> Under Review</span>`;
+      } else if (status === 'completed' || status === 'approved') {
+        actionHtml = `<span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest"><i class="fas fa-check-double mr-1"></i> Finalized</span>`;
+      } else if (status === 'rejected') {
+        actionHtml = `
+          <div class="flex flex-col gap-1">
+            <span class="text-[8px] font-bold text-red-500 uppercase">Rejected by Admin</span>
+            <button onclick="handleOpenCompletionModal(event, '${task.id}')" class="bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white px-2 py-1 rounded text-[10px] font-bold transition-all">Retry Submission</button>
+          </div>
+        `;
+      } else {
+        actionHtml = `<span class="text-slate-500 text-[10px] italic">${status}</span>`;
+      }
+
       tr.innerHTML = `
         <td data-label="Title">
-          <div class="font-bold">${task.title}</div>
+          <div class="font-bold text-white">${task.title}</div>
           ${isOverdue ? '<span class="overdue-badge"><i class="fas fa-exclamation-triangle mr-1"></i> Overdue</span>' : ''}
         </td>
         <td data-label="Category">${task.category}</td>
-        <td data-label="Priority"><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
+        <td data-label="Priority"><span class="priority-badge ${priorityClass}">${priority}</span></td>
         <td data-label="Due Date" class="${isOverdue ? 'text-red-500 font-bold' : ''}">${task.due_date}</td>
-        <td data-label="Status"><span class="status-badge status-${task.status.toLowerCase().replace(' ', '-')}">${task.status}</span></td>
-        <td data-label="Action">
-          <select onchange="updateTaskStatus('${task.id}', this.value)" class="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs">
-            <option value="pending" ${task.status === 'pending' ? 'selected' : ''}>Pending</option>
-            <option value="in-progress" ${task.status === 'in-progress' ? 'selected' : ''}>In Progress</option>
-            <option value="completed" ${task.status === 'completed' ? 'selected' : ''}>Completed</option>
-          </select>
+        <td data-label="Status">
+          <span class="status-badge status-${status.toLowerCase().replace(' ', '-')}">
+            ${status === 'submitted' ? 'Reviewing' : (status === 'completed' ? 'Approved' : status)}
+          </span>
         </td>
+        <td data-label="Action">${actionHtml}</td>
       `;
       taskTableBody.appendChild(tr);
     });
@@ -1902,21 +1989,128 @@ async function fetchMyTasks() {
   }
 }
 
-window.updateTaskStatus = async (id, newStatus) => {
+window.handleTaskAction = async (event, taskId, newStatus) => {
+  if (event) event.stopPropagation();
   try {
-    const updateData = { status: newStatus };
-    if (newStatus === 'completed') {
-      updateData.completion_date = serverTimestamp();
-    } else {
-      updateData.completion_date = null;
+    await updateDoc(doc(db, 'tasks', taskId), { 
+      status: newStatus,
+      updated_at: serverTimestamp() 
+    });
+    showToast(`Task ${newStatus}`, 'success');
+    fetchMyTasks();
+  } catch (error) {
+    console.error("Error updating task action:", error);
+    showToast('Action failed', 'error');
+  }
+};
+
+window.handleOpenCompletionModal = (event, taskId) => {
+  if (event) event.stopPropagation();
+  const modal = document.getElementById('task-submission-modal');
+  const taskIdInput = document.getElementById('submission-task-id');
+  if (modal && taskIdInput) {
+    taskIdInput.value = taskId;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+};
+
+// --- ADMIN TASKS ---
+async function fetchAdminTasks() {
+  const adminTaskTableBody = document.getElementById('admin-tasks-table-body');
+  if (!adminTaskTableBody) return;
+
+  adminTaskTableBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-slate-500"><span class="spinner inline-block mr-2"></span> Loading tasks...</td></tr>';
+
+  try {
+    // Fetch all staff first to create a map for names
+    const staffSnapshot = await getDocs(collection(db, 'users'));
+    const staffMap = {};
+    staffSnapshot.forEach(docSnap => {
+      const data = docSnap.data();
+      staffMap[docSnap.id] = data.name || data.email;
+    });
+
+    const tasksSnapshot = await getDocs(query(collection(db, 'tasks'), orderBy('created_at', 'desc')));
+    const tasks = tasksSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+
+    adminTaskTableBody.innerHTML = '';
+    if (tasks.length === 0) {
+      adminTaskTableBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-slate-500">No tasks assigned yet.</td></tr>';
+      return;
     }
 
-    await updateDoc(doc(db, 'tasks', id), updateData);
-    fetchMyTasks();
-    showToast('Task updated!', 'success');
+    tasks.forEach(task => {
+      const tr = document.createElement('tr');
+      tr.className = 'cursor-pointer hover:bg-white/5 transition-colors';
+      tr.onclick = (e) => {
+        if (!e.target.closest('button')) showTaskDetails(task.id);
+      };
+      
+      const priority = task.priority || 'Medium';
+      const priorityClass = `priority-${priority.toLowerCase()}`;
+      const status = task.status || 'pending';
+      const statusClass = status === 'completed' || status === 'approved' ? 'status-completed' : (status === 'submitted' ? 'status-pending bg-orange-500/10 text-orange-500' : 'status-pending');
+      const assigneeName = staffMap[task.assignee_id] || 'Unknown';
+
+      let actionHtml = '';
+      if (status === 'submitted') {
+        actionHtml = `
+          <div class="flex gap-2">
+            <button onclick="handleAdminReview(event, '${task.id}', 'approved')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded text-[10px] font-bold">Approve</button>
+            <button onclick="handleAdminReview(event, '${task.id}', 'rejected')" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-[10px] font-bold">Reject</button>
+          </div>
+        `;
+      } else {
+        actionHtml = `
+          <button onclick="sendTaskReminder(event, '${task.id}', '${task.title}', '${assigneeName}')" class="text-cyan-400 hover:text-cyan-300 text-xs font-bold" ${status === 'completed' || status === 'approved' ? 'disabled opacity-50' : ''}>
+            <i class="fas fa-paper-plane mr-1"></i> Remind
+          </button>
+        `;
+      }
+
+      tr.innerHTML = `
+        <td data-label="Task">
+          <div class="font-bold text-white">${task.title || 'Untitled Task'}</div>
+          ${status === 'submitted' ? '<span class="text-[8px] bg-orange-500 text-white px-1 rounded ml-1 animate-pulse">Needs Review</span>' : ''}
+        </td>
+        <td data-label="Assignee">${assigneeName}</td>
+        <td data-label="Priority"><span class="priority-badge ${priorityClass}">${priority}</span></td>
+        <td data-label="Due Date">${task.due_date || 'No Date'}</td>
+        <td data-label="Status"><span class="status-badge ${statusClass}">${status === 'submitted' ? 'Reviewing' : (status === 'completed' ? 'Approved' : status)}</span></td>
+        <td data-label="Action">${actionHtml}</td>
+      `;
+      adminTaskTableBody.appendChild(tr);
+    });
   } catch (error) {
-    console.error("Error updating task status:", error);
-    showToast('Update failed', 'error');
+    console.error("Error fetching admin tasks:", error);
+  }
+}
+
+window.handleAdminReview = async (event, taskId, result) => {
+  if (event) event.stopPropagation();
+  try {
+    const status = result === 'approved' ? 'completed' : 'rejected';
+    await updateDoc(doc(db, 'tasks', taskId), {
+      status: status,
+      reviewed_at: serverTimestamp(),
+      reviewed_by: auth.currentUser?.uid
+    });
+    showToast(`Task ${result}`, 'success');
+    fetchAdminTasks();
+    
+    // Notify user
+    const taskSnap = await getDoc(doc(db, 'tasks', taskId));
+    const task = taskSnap.data();
+    addNotification(
+      `Task ${result}`,
+      `Your submission for "${task.title}" has been ${result} by the admin.`,
+      result === 'approved' ? 'success' : 'warning',
+      task.assignee_id
+    );
+  } catch (err) {
+    console.error("Review action failed:", err);
+    showToast('Failed to process review', 'error');
   }
 };
 
@@ -2954,61 +3148,6 @@ if (clearNotificationsBtn && notificationList) {
 }
 
 // Task Reminder System
-async function fetchAdminTasks() {
-  const adminTaskTableBody = document.getElementById('admin-tasks-table-body');
-  if (!adminTaskTableBody) return;
-
-  adminTaskTableBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-slate-500"><span class="spinner inline-block mr-2"></span> Loading tasks...</td></tr>';
-
-  try {
-    // Fetch all staff first to create a map for names
-    const staffSnapshot = await getDocs(collection(db, 'users'));
-    const staffMap = {};
-    staffSnapshot.forEach(docSnap => {
-      const data = docSnap.data();
-      staffMap[docSnap.id] = data.name;
-    });
-
-    const tasksSnapshot = await getDocs(query(collection(db, 'tasks'), orderBy('created_at', 'desc')));
-    const tasks = tasksSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-
-    adminTaskTableBody.innerHTML = '';
-    if (tasks.length === 0) {
-      adminTaskTableBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-slate-500">No tasks assigned yet.</td></tr>';
-      return;
-    }
-
-    tasks.forEach(task => {
-      const tr = document.createElement('tr');
-      tr.className = 'cursor-pointer hover:bg-white/5 transition-colors';
-      tr.onclick = (e) => {
-        if (!e.target.closest('button')) showTaskDetails(task.id);
-      };
-      
-      const priority = task.priority || 'Medium';
-      const priorityClass = `priority-${priority.toLowerCase()}`;
-      const statusClass = task.status === 'completed' ? 'status-completed' : 'status-pending';
-      const assigneeName = staffMap[task.assignee_id] || 'Unknown';
-
-      tr.innerHTML = `
-        <td data-label="Task"><div class="font-bold text-white">${task.title || 'Untitled Task'}</div></td>
-        <td data-label="Assignee">${assigneeName}</td>
-        <td data-label="Priority"><span class="priority-badge ${priorityClass}">${priority}</span></td>
-        <td data-label="Due Date">${task.due_date || 'No Date'}</td>
-        <td data-label="Status"><span class="status-badge ${statusClass}">${task.status || 'pending'}</span></td>
-        <td data-label="Action">
-          <button onclick="sendTaskReminder(event, '${task.id}', '${task.title}', '${assigneeName}')" class="text-cyan-400 hover:text-cyan-300 text-xs font-bold" ${task.status === 'completed' ? 'disabled opacity-50' : ''}>
-            <i class="fas fa-paper-plane mr-1"></i> Remind
-          </button>
-        </td>
-      `;
-      adminTaskTableBody.appendChild(tr);
-    });
-  } catch (error) {
-    console.error("Error fetching admin tasks:", error);
-  }
-}
-
 window.sendTaskReminder = async (event, taskId, taskTitle, assigneeName) => {
   // In a real app, this would send an email or push notification
   // For this demo, we'll simulate it by adding a notification for the staff member
@@ -3129,13 +3268,14 @@ async function fetchNotifications() {
   }
 }
 
-async function addNotification(title, message, tag) {
+async function addNotification(title, message, tag, targetUserId) {
   const user = auth.currentUser;
-  if (!user) return;
+  const recipientId = targetUserId || user?.uid;
+  if (!recipientId) return;
 
   try {
     await addDoc(collection(db, 'notifications'), {
-      user_id: user.uid,
+      user_id: recipientId,
       title,
       message,
       tag,
@@ -3143,7 +3283,7 @@ async function addNotification(title, message, tag) {
       created_at: serverTimestamp()
     });
 
-    fetchNotifications();
+    if (recipientId === user?.uid) fetchNotifications();
   } catch (error) {
     console.error("Error adding notification:", error);
   }
@@ -3193,8 +3333,15 @@ async function showTaskDetails(taskId) {
         </div>
         ${completionDate ? `
         <div class="glass p-4 rounded-xl col-span-2 border-emerald-500/20">
-          <p class="text-[10px] text-emerald-500 uppercase font-bold mb-1">Completed On</p>
+          <p class="text-[10px] text-emerald-500 uppercase font-bold mb-1">Finalized On</p>
           <p class="font-bold text-emerald-400">${completionDate.toLocaleString()}</p>
+        </div>
+        ` : ''}
+        ${task.submission_notes ? `
+        <div class="glass p-4 rounded-xl col-span-2 border-cyan-500/20">
+          <p class="text-[10px] text-cyan-400 uppercase font-bold mb-1">Submission Notes</p>
+          <p class="text-sm mb-2">${task.submission_notes}</p>
+          ${task.submission_link ? `<a href="${task.submission_link}" target="_blank" class="text-cyan-400 text-xs hover:underline flex items-center gap-1"><i class="fas fa-external-link-alt"></i> View Submission Link</a>` : ''}
         </div>
         ` : ''}
       </div>
