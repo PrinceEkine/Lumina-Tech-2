@@ -2190,23 +2190,32 @@ async function fetchStaffDashboardStats() {
   const staffDashboardTasksBody = document.getElementById('staff-dashboard-tasks-body');
   
   try {
-    // Fetch user's tasks
-    const tasksQ = query(collection(db, 'tasks'), where('assignee_id', '==', user.uid), orderBy('due_date', 'asc'));
-    const tasksSnapshot = await getDocs(tasksQ);
-    const tasks = tasksSnapshot.docs.map(docSnap => docSnap.data());
+    const tasksSnapshot = await getDocs(collection(db, 'tasks'));
+    let tasks = tasksSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    
+    // Filter by assignee in memory
+    tasks = tasks.filter(t => t.assignee_id === user.uid);
+    
+    // Sort by due date in memory
+    tasks.sort((a, b) => {
+      const dateA = new Date(a.due_date || 0);
+      const dateB = new Date(b.due_date || 0);
+      return dateA - dateB;
+    });
 
-    // Fetch user's attendance
     const attendanceQ = query(collection(db, 'attendance'), where('staff_id', '==', user.uid));
     const attendanceSnapshot = await getDocs(attendanceQ);
     const attendance = attendanceSnapshot.docs.map(docSnap => docSnap.data());
 
-    const completedTasks = tasks ? tasks.filter(t => t.status === 'completed').length : 0;
-    const pendingTasksCount = tasks ? tasks.filter(t => t.status !== 'completed').length : 0;
-    const upcomingTasks = tasks ? tasks.filter(t => t.status !== 'completed').slice(0, 5) : [];
+    const completedTasks = tasks ? tasks.filter(t => ['completed', 'approved'].includes(t.status)).length : 0;
+    const pendingTasksCount = tasks ? tasks.filter(t => !['completed', 'approved'].includes(t.status)).length : 0;
+    const upcomingTasks = tasks ? tasks.filter(t => !['completed', 'approved'].includes(t.status)).slice(0, 5) : [];
     
     if (completedTasksEl) completedTasksEl.innerText = completedTasks;
     const pendingTasksCountEl = document.getElementById('staff-pending-tasks-count');
     if (pendingTasksCountEl) pendingTasksCountEl.innerText = `${pendingTasksCount} pending`;
+    const pendingTasksStatEl = document.getElementById('staff-pending-tasks-stat');
+    if (pendingTasksStatEl) pendingTasksStatEl.innerText = pendingTasksCount;
 
     // Populate today's clock status on dashboard
     const today = new Date().toISOString().split('T')[0];
@@ -2242,13 +2251,14 @@ async function fetchStaffDashboardStats() {
         upcomingTasks.forEach(task => {
           const tr = document.createElement('tr');
           const priorityClass = `priority-${task.priority.toLowerCase()}`;
-          const statusClass = task.status === 'completed' ? 'status-completed' : 'status-pending';
+          const statusClass = ['completed', 'approved'].includes(task.status) ? 'status-completed' : (task.status === 'submitted' ? 'status-pending bg-orange-500/10 text-orange-500' : 'status-pending');
+          const displayStatus = task.status === 'submitted' ? 'Reviewing' : (['completed', 'approved'].includes(task.status) ? 'Approved' : task.status);
 
           tr.innerHTML = `
-            <td data-label="Task"><div class="font-bold">${task.title}</div></td>
+            <td data-label="Task"><div class="font-bold text-white">${task.title}</div></td>
             <td data-label="Priority"><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
             <td data-label="Due Date">${task.due_date}</td>
-            <td data-label="Status"><span class="status-badge ${statusClass}">${task.status}</span></td>
+            <td data-label="Status"><span class="status-badge ${statusClass}">${displayStatus}</span></td>
             <td data-label="Action">
               <button onclick="document.getElementById('nav-my-tasks').click()" class="text-cyan-400 hover:text-cyan-300 text-xs font-bold">
                 View

@@ -23,7 +23,7 @@ service cloud.firestore {
     }
 
     function isStaff() {
-      return isSignedIn() && getUserData().role in ['Admin', 'HR', 'Staff', 'CEO', 'Assistant CEO', 'Ass CEO'];
+      return isSignedIn() && getUserData().role != 'Client' && getUserData().role != null;
     }
 
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
@@ -35,8 +35,7 @@ service cloud.firestore {
     function isValidUser(data) {
       return data.keys().hasAll(['name', 'email', 'role']) &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
-             data.email is string && data.email.size() <= 100 &&
-             data.role in ['Admin', 'HR', 'Staff', 'Client', 'CEO', 'Assistant CEO', 'Ass CEO'];
+             data.email is string && data.email.size() <= 100;
     }
 
     function isValidAttendance(data) {
