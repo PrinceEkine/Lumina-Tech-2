@@ -1815,6 +1815,22 @@ async function fetchStaffForDropdown() {
 }
 
 const assignTaskForm = document.getElementById('assign-task-form');
+const taskImageFile = document.getElementById('task-image-file');
+const taskImagePreview = document.getElementById('task-image-preview');
+if (taskImageFile && taskImagePreview) {
+  taskImageFile.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        taskImagePreview.innerHTML = `<img src="${event.target.result}" class="w-full h-full object-cover">`;
+        document.getElementById('task-attachment').value = event.target.result; // Use Base64 as the URL
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+}
+
 if (assignTaskForm) {
   assignTaskForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1919,20 +1935,22 @@ async function fetchMyTasks() {
   if (!taskTableBody) return;
 
   const filterValue = statusFilter ? statusFilter.value : 'all';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   try {
     const user = auth.currentUser;
     if (!user) return;
 
-    // Use a simpler query if no index is present.
-    let q = query(collection(db, 'tasks'), where('assignee_id', '==', user.uid));
-    
-    const snapshot = await getDocs(q);
+    const snapshot = await getDocs(collection(db, 'tasks'));
     let tasks = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
-    // Filtering and sorting in memory to avoid index requirements
+    // Filter by assignee
+    tasks = tasks.filter(t => t.assignee_id === user.uid);
+
+    // Filtering in memory
     if (filterValue !== 'all') {
-      tasks = tasks.filter(t => t.status === filterValue);
+      tasks = tasks.filter(t => t.status === (filterValue === 'pending' ? 'pending' : (filterValue === 'completed' ? 'completed' : filterValue)));
     }
     
     tasks.sort((a, b) => {
@@ -1942,7 +1960,7 @@ async function fetchMyTasks() {
     });
 
     taskTableBody.innerHTML = '';
-    if (taskCountBadge) taskCountBadge.innerText = tasks.filter(t => t.status !== 'completed').length;
+    if (taskCountBadge) taskCountBadge.innerText = tasks.filter(t => !['completed', 'approved'].includes(t.status)).length;
 
     if (tasks.length === 0) {
       taskTableBody.innerHTML = `<tr><td colspan="6" class="text-center py-12 text-slate-500">No ${filterValue !== 'all' ? filterValue : ''} tasks found</td></tr>`;
@@ -1961,7 +1979,7 @@ async function fetchMyTasks() {
       dueDate.setHours(0, 0, 0, 0);
       
       const status = task.status || 'pending';
-      const isOverdue = dueDate < today && status !== 'completed';
+      const isOverdue = dueDate < today && !['completed', 'approved', 'submitted'].includes(status);
       
       if (isOverdue) tr.classList.add('overdue-row');
 
@@ -1973,21 +1991,14 @@ async function fetchMyTasks() {
             <button onclick="handleTaskAction(event, '${task.id}', 'declined')" class="bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white px-2 py-1 rounded text-[10px] font-bold transition-all">Decline</button>
           </div>
         `;
-      } else if (status === 'accepted' || status === 'in-progress') {
-        actionHtml = `
-          <button onclick="handleOpenCompletionModal(event, '${task.id}')" class="bg-cyan-500 hover:bg-cyan-600 text-black px-3 py-1 rounded text-[10px] font-black uppercase tracking-tighter transition-all">Complete Task</button>
-        `;
+      } else if (status === 'accepted') {
+        actionHtml = `<button onclick="handleOpenCompletionModal(event, '${task.id}')" class="text-cyan-400 hover:text-cyan-300 text-xs font-bold uppercase"><i class="fas fa-paper-plane mr-1"></i> Submit Task</button>`;
       } else if (status === 'submitted') {
-        actionHtml = `<span class="text-[10px] font-bold text-orange-400 uppercase tracking-widest"><i class="fas fa-clock mr-1"></i> Under Review</span>`;
-      } else if (status === 'completed' || status === 'approved') {
+        actionHtml = `<span class="text-[10px] font-bold text-orange-400 uppercase tracking-widest animate-pulse"><i class="fas fa-clock mr-1"></i> Under Review</span>`;
+      } else if (['completed', 'approved', 'finalized'].includes(status)) {
         actionHtml = `<span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest"><i class="fas fa-check-double mr-1"></i> Finalized</span>`;
-      } else if (status === 'rejected') {
-        actionHtml = `
-          <div class="flex flex-col gap-1">
-            <span class="text-[8px] font-bold text-red-500 uppercase">Rejected by Admin</span>
-            <button onclick="handleOpenCompletionModal(event, '${task.id}')" class="bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white px-2 py-1 rounded text-[10px] font-bold transition-all">Retry Submission</button>
-          </div>
-        `;
+      } else if (status === 'rejected' || status === 'declined') {
+        actionHtml = status === 'rejected' ? `<button onclick="handleOpenCompletionModal(event, '${task.id}')" class="bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white px-2 py-1 rounded text-[10px] font-bold transition-all">Fix & Resubmit</button>` : '<span class="text-red-400 text-[10px]">Declined</span>';
       } else {
         actionHtml = `<span class="text-slate-500 text-[10px] italic">${status}</span>`;
       }
@@ -2002,7 +2013,7 @@ async function fetchMyTasks() {
         <td data-label="Due Date" class="${isOverdue ? 'text-red-500 font-bold' : ''}">${task.due_date}</td>
         <td data-label="Status">
           <span class="status-badge status-${status.toLowerCase().replace(' ', '-')}">
-            ${status === 'submitted' ? 'Reviewing' : (status === 'completed' ? 'Approved' : status)}
+            ${status === 'submitted' ? 'Reviewing' : (status === 'approved' || status === 'completed' ? 'Approved' : status)}
           </span>
         </td>
         <td data-label="Action">${actionHtml}</td>
@@ -2106,14 +2117,14 @@ async function fetchAdminTasks() {
       if (status === 'submitted') {
         actionHtml = `
           <div class="flex gap-2">
-            <button onclick="handleAdminReview(event, '${task.id}', 'approved')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded text-[10px] font-bold">Approve</button>
-            <button onclick="handleAdminReview(event, '${task.id}', 'rejected')" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-[10px] font-bold">Reject</button>
+            <button onclick="handleAdminReview(event, '${task.id}', 'approved')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tighter">Approve</button>
+            <button onclick="handleAdminReview(event, '${task.id}', 'rejected')" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tighter">Reject</button>
           </div>
         `;
       } else {
         actionHtml = `
-          <button onclick="sendTaskReminder(event, '${task.id}', '${task.title}', '${assigneeName}')" class="text-cyan-400 hover:text-cyan-300 text-xs font-bold" ${status === 'completed' || status === 'approved' ? 'disabled opacity-50' : ''}>
-            <i class="fas fa-paper-plane mr-1"></i> Remind
+          <button onclick="sendTaskReminder(event, '${task.id}', '${task.title}', '${assigneeName}')" class="text-cyan-400 hover:text-cyan-300 text-[10px] font-bold uppercase tracking-widest" ${['completed', 'approved'].includes(status) ? 'disabled opacity-50' : ''}>
+            <i class="fas fa-bell"></i> Remind
           </button>
         `;
       }
@@ -2126,7 +2137,7 @@ async function fetchAdminTasks() {
         <td data-label="Assignee">${assigneeName}</td>
         <td data-label="Priority"><span class="priority-badge ${priorityClass}">${priority}</span></td>
         <td data-label="Due Date">${task.due_date || 'No Date'}</td>
-        <td data-label="Status"><span class="status-badge ${statusClass}">${status === 'submitted' ? 'Reviewing' : (status === 'completed' ? 'Approved' : status)}</span></td>
+        <td data-label="Status"><span class="status-badge ${statusClass}">${status === 'submitted' ? 'Reviewing' : (['completed', 'approved'].includes(status) ? 'Approved' : status)}</span></td>
         <td data-label="Action">${actionHtml}</td>
       `;
       adminTaskTableBody.appendChild(tr);
@@ -2138,23 +2149,28 @@ async function fetchAdminTasks() {
 
 window.handleAdminReview = async (event, taskId, result) => {
   if (event) event.stopPropagation();
+  
+  const notes = prompt(result === 'approved' ? 'Add optional approval notes:' : 'Why are you rejecting this submission?');
+  if (result === 'rejected' && !notes) return;
+
   try {
-    const status = result === 'approved' ? 'completed' : 'rejected';
+    const status = result === 'approved' ? 'approved' : 'rejected';
     await updateDoc(doc(db, 'tasks', taskId), {
       status: status,
       reviewed_at: serverTimestamp(),
-      reviewed_by: auth.currentUser?.uid
+      reviewer_remarks: notes || '',
+      updated_at: serverTimestamp()
     });
+    
     showToast(`Task ${result}`, 'success');
     fetchAdminTasks();
     
-    // Notify user
     const taskSnap = await getDoc(doc(db, 'tasks', taskId));
     const task = taskSnap.data();
     addNotification(
-      `Task ${result}`,
-      `Your submission for "${task.title}" has been ${result} by the admin.`,
-      result === 'approved' ? 'success' : 'warning',
+      `Task ${result.charAt(0).toUpperCase() + result.slice(1)}`,
+      `Your task "${task.title}" has been ${result} by Admin. ${notes ? 'Notes: ' + notes : ''}`,
+      result === 'approved' ? 'success' : 'alert',
       task.assignee_id
     );
   } catch (err) {
@@ -3457,7 +3473,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Theme Toggle Logic removed from bottom
-// --- BLOG MANAGEMENT LOGIC ---
 async function fetchBlogs() {
   const container = document.getElementById('blog-posts-container');
   if (!container) return;
@@ -3466,8 +3481,12 @@ async function fetchBlogs() {
     const snapshot = await getDocs(collection(db, 'blogs'));
     let blogs = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
     
-    // Sort in memory
-    blogs.sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0));
+    // Improved sort in memory - handle Timestamp objects and numbers properly
+    blogs.sort((a, b) => {
+      const timeA = a.created_at?.toMillis ? a.created_at.toMillis() : (a.created_at?.seconds ? a.created_at.seconds * 1000 : (Number(a.created_at) || 0));
+      const timeB = b.created_at?.toMillis ? b.created_at.toMillis() : (b.created_at?.seconds ? b.created_at.seconds * 1000 : (Number(b.created_at) || 0));
+      return timeB - timeA;
+    });
 
     if (blogs.length === 0) {
       container.innerHTML = '<div class="col-span-full text-center py-12 text-slate-500">No blog posts found yet. Check back soon!</div>';
