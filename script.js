@@ -3473,23 +3473,45 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Theme Toggle Logic removed from bottom
-async function fetchBlogs() {
+async function fetchBlogs(searchTerm = '', categoryFilter = 'All') {
   const container = document.getElementById('blog-posts-container');
   if (!container) return;
+  console.log("[Blog] Fetching blogs with filter:", { searchTerm, categoryFilter });
 
   try {
     const snapshot = await getDocs(collection(db, 'blogs'));
     let blogs = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    console.log("[Blog] Fetched posts count:", blogs.length);
     
     // Improved sort in memory - handle Timestamp objects and numbers properly
     blogs.sort((a, b) => {
-      const timeA = a.created_at?.toMillis ? a.created_at.toMillis() : (a.created_at?.seconds ? a.created_at.seconds * 1000 : (Number(a.created_at) || 0));
-      const timeB = b.created_at?.toMillis ? b.created_at.toMillis() : (b.created_at?.seconds ? b.created_at.seconds * 1000 : (Number(b.created_at) || 0));
+      const timeA = a.created_at?.toMillis ? a.created_at.toMillis() : (a.created_at?.seconds ? a.created_at.seconds * 1000 : (new Date(a.created_at).getTime() || 0));
+      const timeB = b.created_at?.toMillis ? b.created_at.toMillis() : (b.created_at?.seconds ? b.created_at.seconds * 1000 : (new Date(b.created_at).getTime() || 0));
       return timeB - timeA;
     });
 
+    // Client-side filtering
+    if (categoryFilter && categoryFilter !== 'All') {
+      blogs = blogs.filter(b => b.category === categoryFilter);
+    }
+    
+    if (searchTerm) {
+      const s = searchTerm.toLowerCase();
+      blogs = blogs.filter(b => 
+        b.title?.toLowerCase().includes(s) || 
+        b.excerpt?.toLowerCase().includes(s) ||
+        b.category?.toLowerCase().includes(s)
+      );
+    }
+
     if (blogs.length === 0) {
-      container.innerHTML = '<div class="col-span-full text-center py-12 text-slate-500">No blog posts found yet. Check back soon!</div>';
+      container.innerHTML = `
+        <div class="col-span-full text-center py-24">
+          <i class="fas fa-search text-4xl text-slate-700 mb-4 block"></i>
+          <p class="text-slate-500">No blog posts found${searchTerm ? ` for "${searchTerm}"` : ''}.</p>
+          ${searchTerm || categoryFilter !== 'All' ? '<button onclick="resetBlogFilters()" class="text-cyan-400 mt-4 underline">Clear filters</button>' : ''}
+        </div>
+      `;
       return;
     }
 
@@ -3531,7 +3553,11 @@ async function fetchAdminBlogs() {
     let blogs = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
     // Sort in memory
-    blogs.sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0));
+    blogs.sort((a, b) => {
+      const timeA = a.created_at?.toMillis ? a.created_at.toMillis() : (a.created_at?.seconds ? a.created_at.seconds * 1000 : (new Date(a.created_at).getTime() || 0));
+      const timeB = b.created_at?.toMillis ? b.created_at.toMillis() : (b.created_at?.seconds ? b.created_at.seconds * 1000 : (new Date(b.created_at).getTime() || 0));
+      return timeB - timeA;
+    });
 
     if (blogs.length === 0) {
       tableBody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-slate-500">No blogs found. Create your first post!</td></tr>';
@@ -3696,8 +3722,52 @@ window.deleteBlog = async (id) => {
 };
 
 // Initialize Blog page
-if (window.location.pathname.includes('blog.html')) {
-  document.addEventListener('DOMContentLoaded', fetchBlogs);
+function initializeBlogPage() {
+  const blogContainer = document.getElementById('blog-posts-container');
+  if (blogContainer) {
+    fetchBlogs();
+
+    // Search Logic
+    const searchInput = document.getElementById('blog-search');
+    if (searchInput) {
+      let timeout = null;
+      searchInput.addEventListener('input', (e) => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          const activeBtn = document.querySelector('.blogs button.active');
+          fetchBlogs(e.target.value, activeBtn ? activeBtn.innerText : 'All');
+        }, 300);
+      });
+    }
+
+    // Category Logic
+    const categoryBtns = document.querySelectorAll('.blogs div.flex.gap-2 button');
+    categoryBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        categoryBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        fetchBlogs(searchInput?.value || '', btn.innerText);
+      });
+    });
+  }
+
+  if (document.getElementById('admin-blogs-table-body')) {
+    fetchAdminBlogs();
+  }
+}
+
+window.resetBlogFilters = () => {
+  const searchInput = document.getElementById('blog-search');
+  if (searchInput) searchInput.value = '';
+  const firstBtn = document.querySelector('.blogs button');
+  if (firstBtn) firstBtn.click();
+  else fetchBlogs();
+};
+
+document.addEventListener('DOMContentLoaded', initializeBlogPage);
+// Also run immediately in case DOM is already parsed (modules can be deferred)
+if (document.readyState === 'interactive' || document.readyState === 'complete') {
+  initializeBlogPage();
 }
 
 // Smooth Scroll for Anchor Links
