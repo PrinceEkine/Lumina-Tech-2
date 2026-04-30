@@ -1965,7 +1965,13 @@ async function fetchMyTasks() {
 
     // Filtering in memory
     if (filterValue !== 'all') {
-      tasks = tasks.filter(t => t.status === (filterValue === 'pending' ? 'pending' : (filterValue === 'completed' ? 'completed' : filterValue)));
+      if (filterValue === 'pending') {
+        tasks = tasks.filter(t => ['pending', 'assigned', 'accepted'].includes(t.status));
+      } else if (filterValue === 'approved') {
+        tasks = tasks.filter(t => ['approved', 'completed', 'finalized'].includes(t.status));
+      } else {
+        tasks = tasks.filter(t => t.status === filterValue);
+      }
     }
     
     tasks.sort((a, b) => {
@@ -1988,6 +1994,7 @@ async function fetchMyTasks() {
       tr.onclick = (e) => {
         if (!e.target.closest('button')) showTaskDetails(task.id, 'staff');
       };
+      const priority = task.priority || 'Medium';
       const priorityClass = `priority-${priority.toLowerCase()}`;
       const dueDate = task.due_date ? new Date(task.due_date) : new Date();
       dueDate.setHours(0, 0, 0, 0);
