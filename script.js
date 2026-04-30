@@ -1986,9 +1986,8 @@ async function fetchMyTasks() {
       const tr = document.createElement('tr');
       tr.className = 'cursor-pointer hover:bg-white/5 transition-colors';
       tr.onclick = (e) => {
-        if (!e.target.closest('button')) showTaskDetails(task.id);
+        if (!e.target.closest('button')) showTaskDetails(task.id, 'staff');
       };
-      const priority = task.priority || 'Medium';
       const priorityClass = `priority-${priority.toLowerCase()}`;
       const dueDate = task.due_date ? new Date(task.due_date) : new Date();
       dueDate.setHours(0, 0, 0, 0);
@@ -2119,7 +2118,7 @@ async function fetchAdminTasks() {
       const tr = document.createElement('tr');
       tr.className = 'cursor-pointer hover:bg-white/5 transition-colors';
       tr.onclick = (e) => {
-        if (!e.target.closest('button')) showTaskDetails(task.id);
+        if (!e.target.closest('button')) showTaskDetails(task.id, 'admin');
       };
       
       const priority = task.priority || 'Medium';
@@ -3413,10 +3412,11 @@ async function fetchNotifications() {
             const isAdmin = localStorage.getItem('isAdminSession') === 'true';
             if (isAdmin) {
               document.getElementById('nav-assign-task').click();
+              showTaskDetails(id, 'admin');
             } else {
               document.getElementById('nav-my-tasks').click();
+              showTaskDetails(id, 'staff');
             }
-            showTaskDetails(id);
           } else if (type === 'booking') {
             document.getElementById('nav-bookings').click();
           } else if (type === 'message') {
@@ -3458,12 +3458,13 @@ async function addNotification(title, message, tag, targetUserId, data = null) {
 }
 
 // --- Task Detail Modal Logic ---
-async function showTaskDetails(taskId) {
+async function showTaskDetails(taskId, viewContext = 'staff') {
   const modal = document.getElementById('task-detail-modal');
   const content = document.getElementById('task-detail-content');
   if (!modal || !content) return;
 
   const isAdminFlag = localStorage.getItem('isAdminSession') === 'true';
+  const showReviewButtons = isAdminFlag && viewContext === 'admin' && (document.body.classList.contains('is-admin') || document.body.classList.contains('is-hr'));
 
   try {
     const taskSnap = await getDoc(doc(db, 'tasks', taskId));
@@ -3577,7 +3578,7 @@ async function showTaskDetails(taskId) {
       </div>
 
       <div class="flex flex-col gap-3 pt-4 border-t border-white/10">
-        ${(isAdminFlag && task.status === 'submitted') ? `
+        ${(showReviewButtons && task.status === 'submitted') ? `
           <div class="flex gap-3">
             <button onclick="handleAdminReview(null, '${taskId}', 'approved')" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-black font-bold py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2">
               <i class="fas fa-check-circle"></i> Approve
