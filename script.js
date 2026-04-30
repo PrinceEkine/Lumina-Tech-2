@@ -3478,100 +3478,112 @@ async function showTaskDetails(taskId) {
     content.innerHTML = `
       <div class="mb-6">
         <div class="flex justify-between items-center mb-2">
-          <span class="badge glass">${task.category}</span>
           <span class="priority-badge priority-${task.priority.toLowerCase()}">${task.priority}</span>
+          <span class="badge glass text-[10px] uppercase tracking-wider px-2 py-0.5 rounded">${task.category}</span>
         </div>
-        <h2 class="text-2xl font-bold">${task.title}</h2>
+        <h2 class="text-2xl font-bold text-white">${task.title}</h2>
       </div>
 
-      <div class="grid grid-cols-2 gap-4 mb-8">
-        <div class="glass p-4 rounded-xl">
+      <div class="grid grid-cols-2 gap-3 mb-6">
+        <div class="glass p-3 rounded-xl">
           <p class="text-[10px] text-slate-500 uppercase font-bold mb-1">Assignee</p>
-          <p class="font-bold">${staffName}</p>
+          <p class="text-xs font-bold text-white">${staffName}</p>
         </div>
-        <div class="glass p-4 rounded-xl">
+        <div class="glass p-3 rounded-xl">
           <p class="text-[10px] text-slate-500 uppercase font-bold mb-1">Due Date</p>
-          <p class="font-bold text-cyan-400">${task.due_date}</p>
+          <p class="text-xs font-bold text-cyan-400">${task.due_date}</p>
         </div>
-        <div class="glass p-4 rounded-xl">
+        <div class="glass p-3 rounded-xl">
           <p class="text-[10px] text-slate-500 uppercase font-bold mb-1">Status</p>
-          <p class="font-bold capitalize">${task.status}</p>
+          <p class="text-xs font-bold capitalize text-white">${task.status}</p>
         </div>
-        <div class="glass p-4 rounded-xl">
-          <p class="text-[10px] text-slate-500 uppercase font-bold mb-1">Reminders</p>
-          <p class="font-bold">${task.reminders ? 'Enabled' : 'Disabled'}</p>
+        <div class="glass p-3 rounded-xl">
+          <p class="text-[10px] text-slate-500 uppercase font-bold mb-1">Created By</p>
+          <p class="text-xs font-bold text-white">${task.created_by_name || 'Admin'}</p>
         </div>
-        ${completionDate ? `
-        <div class="glass p-4 rounded-xl col-span-2 border-emerald-500/20">
-          <p class="text-[10px] text-emerald-500 uppercase font-bold mb-1">Finalized On</p>
-          <p class="font-bold text-emerald-400">${completionDate.toLocaleString()}</p>
-        </div>
-        ` : ''}
-        ${(task.status === 'submitted' || task.status === 'approved' || task.status === 'rejected' || task.submission_notes) ? `
-        <div class="glass p-4 rounded-xl col-span-2 border-cyan-500/30 bg-cyan-500/5">
-          <p class="text-[10px] text-cyan-400 uppercase font-bold mb-2">Team Member Submission</p>
-          <div class="mb-4">
-            <p class="text-xs text-slate-500 uppercase font-bold mb-1">Notes</p>
-            <p class="text-sm text-slate-200 bg-slate-900/50 p-3 rounded-lg border border-white/5 whitespace-pre-wrap">${task.submission_notes || '<span class="italic text-slate-500">No notes provided</span>'}</p>
+      </div>
+
+      ${completionDate ? `
+      <div class="glass p-3 rounded-xl mb-6 border-emerald-500/20 bg-emerald-500/5">
+        <p class="text-[10px] text-emerald-500 uppercase font-bold mb-1">Finalized On</p>
+        <p class="text-xs font-bold text-emerald-400">${completionDate.toLocaleString()}</p>
+      </div>
+      ` : ''}
+
+      ${(task.status === 'submitted' || task.status === 'approved' || task.status === 'rejected' || task.submission_notes || task.submission_image) ? `
+      <div class="glass p-4 rounded-xl mb-6 border-cyan-500/30 bg-cyan-500/5">
+        <p class="text-[10px] text-cyan-400 uppercase font-bold mb-3 flex items-center gap-2">
+          <i class="fas fa-check-circle"></i> Team Member Submission
+        </p>
+        
+        <div class="mb-4">
+          <p class="text-[10px] text-slate-500 uppercase font-bold mb-1">Submission Notes</p>
+          <div class="text-sm text-slate-200 bg-slate-900/50 p-4 rounded-lg border border-white/5 whitespace-pre-wrap leading-relaxed">
+            ${task.submission_notes || task.notes || task.remarks || '<span class="italic text-slate-500 text-xs">No specific submission notes were found.</span>'}
           </div>
-          ${task.submission_image ? `
-            <div class="mb-4">
-              <p class="text-xs text-slate-500 uppercase font-bold mb-2">Screenshot</p>
-              <div class="rounded-xl overflow-hidden border border-white/10 group relative">
-                <img src="${task.submission_image}" alt="Submission Preview" class="w-full h-auto object-cover max-h-80 cursor-pointer transition-transform group-hover:scale-[1.02]" onclick="window.open(this.src, '_blank')">
-                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity pointer-events-none">
-                  <span class="text-white text-xs font-bold bg-black/60 px-3 py-1 rounded-full"><i class="fas fa-expand-alt mr-1"></i> View Full Size</span>
-                </div>
+        </div>
+
+        ${task.submission_image ? `
+          <div class="mb-4">
+            <p class="text-[10px] text-slate-500 uppercase font-bold mb-2">Screenshot / Proof</p>
+            <div class="rounded-xl overflow-hidden border border-white/10 group relative max-h-64">
+              <img src="${task.submission_image}" alt="Submission Proof" class="w-full h-auto object-cover cursor-pointer transition-transform group-hover:scale-[1.02]" onclick="window.open(this.src, '_blank')">
+              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity pointer-events-none">
+                <span class="text-white text-[10px] font-bold bg-black/60 px-3 py-1 rounded-full"><i class="fas fa-expand-alt mr-1"></i> View Full Size</span>
               </div>
             </div>
-          ` : ''}
-          ${task.submission_link ? `
-            <div>
-              <p class="text-xs text-slate-500 uppercase font-bold mb-1">External Link</p>
-              <a href="${task.submission_link}" target="_blank" class="text-cyan-400 text-sm hover:underline flex items-center gap-1">
-                <i class="fas fa-external-link-alt"></i> 
-                ${task.submission_link.length > 50 ? task.submission_link.substring(0, 47) + '...' : task.submission_link}
-              </a>
-            </div>
-          ` : ''}
-        </div>
+          </div>
+        ` : ''}
+
+        ${task.submission_link ? `
+          <div class="mb-2">
+            <p class="text-[10px] text-slate-500 uppercase font-bold mb-1">External Link</p>
+            <a href="${task.submission_link}" target="_blank" class="text-cyan-400 text-xs hover:underline flex items-center gap-2 bg-slate-900/50 p-3 rounded-lg border border-white/5 truncate block">
+              <i class="fas fa-external-link-alt flex-shrink-0"></i> 
+              <span class="truncate">${task.submission_link}</span>
+            </a>
+          </div>
         ` : ''}
       </div>
+      ` : ''}
 
-      <div class="mb-8">
-        <h4 class="text-sm font-bold text-slate-400 uppercase mb-4 tracking-widest">Resources</h4>
-        <div class="flex flex-wrap gap-4">
+      ${task.reviewer_remarks ? `
+      <div class="glass p-4 rounded-xl mb-6 border-orange-500/30 bg-orange-500/5">
+        <p class="text-[10px] text-orange-400 uppercase font-bold mb-2">Reviewer Feedback</p>
+        <p class="text-sm text-slate-200 whitespace-pre-wrap">${task.reviewer_remarks}</p>
+      </div>
+      ` : ''}
+
+      <div class="mb-6">
+        <h4 class="text-[10px] font-bold text-slate-400 uppercase mb-3 tracking-widest">Original Task Details</h4>
+        <div class="bg-slate-900/50 p-4 rounded-xl border border-white/5 mb-4">
+          <p class="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">${task.description || 'No description provided.'}</p>
+        </div>
+        
+        <div class="flex flex-wrap gap-2">
           ${task.task_link ? `
-            <a href="${task.task_link}" target="_blank" class="glass px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-cyan-500/10 transition-all border border-cyan-500/20">
-              <i class="fas fa-external-link-alt text-cyan-400"></i>
-              <span class="text-xs font-bold">Resource Link</span>
+            <a href="${task.task_link}" target="_blank" class="glass px-3 py-1.5 rounded-lg flex items-center gap-2 hover:bg-cyan-500/10 transition-all border border-cyan-500/20">
+              <i class="fas fa-link text-cyan-400 text-[10px]"></i>
+              <span class="text-[10px] font-bold text-slate-300 font-sans">Reference Link</span>
             </a>
           ` : ''}
           ${task.attachment_url ? `
-            <a href="${task.attachment_url}" target="_blank" class="glass px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-emerald-500/10 transition-all border border-emerald-500/20">
-              <i class="fas fa-paperclip text-emerald-400"></i>
-              <span class="text-xs font-bold">Attachment</span>
+            <a href="${task.attachment_url}" target="_blank" class="glass px-3 py-1.5 rounded-lg flex items-center gap-2 hover:bg-emerald-500/10 transition-all border border-emerald-500/20">
+              <i class="fas fa-paperclip text-emerald-400 text-[10px]"></i>
+              <span class="text-[10px] font-bold text-slate-300 font-sans">Attachment</span>
             </a>
           ` : ''}
-          ${!task.task_link && !task.attachment_url ? '<p class="text-slate-500 italic text-xs">No resources provided</p>' : ''}
         </div>
       </div>
 
-      <div class="mb-8">
-        <h4 class="text-sm font-bold text-slate-400 uppercase mb-4 tracking-widest">Description</h4>
-        <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 min-h-[100px]">
-          <p class="text-slate-200 leading-relaxed whitespace-pre-wrap">${task.description || 'No description provided.'}</p>
-        </div>
-      </div>
-      
-      <div class="flex flex-col gap-3">
-        ${task.status === 'submitted' && isAdminFlag ? `
-          <div class="flex gap-2">
-            <button onclick="handleAdminReview(null, '${taskId}', 'approved')" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-emerald-500/20">
-              <i class="fas fa-check-circle mr-2"></i> Approve
+      <div class="flex flex-col gap-3 pt-4 border-t border-white/10">
+        ${(isAdminFlag && task.status === 'submitted') ? `
+          <div class="flex gap-3">
+            <button onclick="handleAdminReview(null, '${taskId}', 'approved')" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-black font-bold py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2">
+              <i class="fas fa-check-circle"></i> Approve
             </button>
-            <button onclick="handleAdminReview(null, '${taskId}', 'rejected')" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-red-500/20">
-              <i class="fas fa-times-circle mr-2"></i> Reject
+            <button onclick="handleAdminReview(null, '${taskId}', 'rejected')" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2">
+              <i class="fas fa-times-circle"></i> Reject
             </button>
           </div>
         ` : ''}
