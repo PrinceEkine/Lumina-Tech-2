@@ -617,7 +617,7 @@ forms.forEach(form => {
     e.preventDefault();
     
     // Skip generic handling for specifically named forms
-    const specificFormHandlers = ['add-announcement-form', 'assign-task-form', 'send-email-form', 'recognition-form', 'leave-form', 'blog-form', 'add-staff-form', 'home-chat-form', 'floating-chat-form'];
+    const specificFormHandlers = ['add-announcement-form', 'assign-task-form', 'task-submission-form', 'send-email-form', 'recognition-form', 'leave-form', 'blog-form', 'add-staff-form', 'home-chat-form', 'floating-chat-form'];
     if (specificFormHandlers.includes(form.id)) return;
     const submitBtn = form.querySelector('button[type="submit"]');
     const originalText = submitBtn ? submitBtn.innerText : 'Submit';
