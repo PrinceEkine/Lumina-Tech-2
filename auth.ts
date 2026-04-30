@@ -27,7 +27,7 @@ export const isAdmin = async (user: FirebaseUser | null) => {
       const data = userDoc.data();
       const role = data.role;
       console.log(`[isAdmin] User doc found. Role: ${role}`);
-      return role === 'Admin' || role === 'CEO' || role === 'Ass CEO';
+      return role === 'Admin' || role === 'CEO' || role === 'Assistant CEO' || role === 'Ass CEO';
     }
     console.log(`[isAdmin] No user doc found for UID: ${user.uid}`);
     return false;

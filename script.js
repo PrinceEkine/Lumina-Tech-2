@@ -2178,7 +2178,13 @@ window.handleAdminReview = async (event, taskId, result) => {
     });
     
     showToast(`Task ${result}`, 'success');
+    
+    // Close modal if open
+    const modal = document.getElementById('task-detail-modal');
+    if (modal) modal.classList.remove('show');
+    
     fetchAdminTasks();
+    fetchMyTasks(); // For cases where self-assigning admins review
     
     const taskSnap = await getDoc(doc(db, 'tasks', taskId));
     const task = taskSnap.data();
@@ -3003,7 +3009,7 @@ async function fetchAttendance() {
 
     const isUserAdmin = await isAdmin(user);
     if (isUserAdmin && adminAttendanceBody) {
-      let qAdm = query(collection(db, 'attendance'), orderBy('created_at', 'desc'), limit(50));
+      let qAdm = query(collection(db, 'attendance'), orderBy('date', 'desc'), limit(50));
       let admSnapshot;
       try {
         admSnapshot = await getDocs(qAdm);
@@ -3015,46 +3021,50 @@ async function fetchAttendance() {
       const allAttendance = admSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
       adminAttendanceBody.innerHTML = '';
-      allAttendance.forEach(record => {
-        const tr = document.createElement('tr');
-        const clockInVal = record.clock_in;
-        let clockInDate;
-        if (clockInVal && clockInVal.toDate) {
-          clockInDate = clockInVal.toDate();
-        } else if (clockInVal) {
-          clockInDate = new Date(clockInVal);
-        } else {
-          clockInDate = new Date();
-        }
-        
-        const clockInStr = clockInDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        
-        let clockOut = '--:--';
-        if (record.clock_out) {
-          const clockOutVal = record.clock_out;
-          let clockOutDate;
-          if (clockOutVal && clockOutVal.toDate) {
-            clockOutDate = clockOutVal.toDate();
+      if (allAttendance.length === 0) {
+        adminAttendanceBody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-slate-500">No staff attendance records found.</td></tr>';
+      } else {
+        allAttendance.forEach(record => {
+          const tr = document.createElement('tr');
+          const clockInVal = record.clock_in;
+          let clockInDate;
+          if (clockInVal && clockInVal.toDate) {
+            clockInDate = clockInVal.toDate();
+          } else if (clockInVal) {
+            clockInDate = new Date(clockInVal);
           } else {
-            clockOutDate = new Date(clockOutVal);
+            clockInDate = new Date();
           }
-          clockOut = clockOutDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        }
-        
-        tr.innerHTML = `
-          <td data-label="Staff" class="font-bold text-white">${record.staff_name || 'Team Member'}</td>
-          <td data-label="Date">${record.date}</td>
-          <td data-label="Clock In" class="text-slate-400 font-mono">${clockInStr}</td>
-          <td data-label="Clock Out" class="text-slate-400 font-mono">${clockOut}</td>
-          <td data-label="Status"><span class="status-badge ${record.clock_out ? 'status-completed' : (record.status === 'Late' ? 'bg-orange-500/10 text-orange-400' : 'status-pending')}">${record.status}</span></td>
-          <td data-label="Action">
-            <button onclick="deleteAttendanceRecord('${record.id}')" class="text-slate-500 hover:text-red-400 transition-colors">
-              <i class="fas fa-trash-alt"></i>
-            </button>
-          </td>
-        `;
-        adminAttendanceBody.appendChild(tr);
-      });
+          
+          const clockInStr = clockInDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          
+          let clockOut = '--:--';
+          if (record.clock_out) {
+            const clockOutVal = record.clock_out;
+            let clockOutDate;
+            if (clockOutVal && clockOutVal.toDate) {
+              clockOutDate = clockOutVal.toDate();
+            } else {
+              clockOutDate = new Date(clockOutVal);
+            }
+            clockOut = clockOutDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          }
+          
+          tr.innerHTML = `
+            <td data-label="Staff" class="font-bold text-white">${record.staff_name || 'Team Member'}</td>
+            <td data-label="Date" class="text-slate-300 font-medium">${record.date}</td>
+            <td data-label="Clock In" class="text-slate-400 font-mono">${clockInStr}</td>
+            <td data-label="Clock Out" class="text-slate-400 font-mono">${clockOut}</td>
+            <td data-label="Status"><span class="status-badge ${record.clock_out ? 'status-completed' : (record.status === 'Late' ? 'bg-orange-500/10 text-orange-400' : 'status-pending')}">${record.status}</span></td>
+            <td data-label="Action">
+              <button onclick="deleteAttendanceRecord('${record.id}')" class="text-slate-500 hover:text-red-400 transition-colors">
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            </td>
+          `;
+          adminAttendanceBody.appendChild(tr);
+        });
+      }
     }
 
   } catch (err) {
@@ -3100,7 +3110,8 @@ async function handleClockIn() {
         staff_name: staffName,
         clock_in: serverTimestamp(),
         date: today,
-        status: isLate ? 'Late' : 'Present'
+        status: isLate ? 'Late' : 'Present',
+        created_at: serverTimestamp()
       });
 
       showToast(`Clocked in successfully! ${isLate ? '(Marked as Late)' : ''}`, isLate ? 'warning' : 'success');
@@ -3311,7 +3322,8 @@ async function fetchNotifications() {
     let snapUser;
     try {
       snapUser = await getDocs(qUser);
-    } catch {
+    } catch (e) {
+      console.warn("User notification fallback:", e);
       qUser = query(collection(db, 'notifications'), where('user_id', '==', user.uid), limit(20));
       snapUser = await getDocs(qUser);
     }
@@ -3324,7 +3336,8 @@ async function fetchNotifications() {
       let snapAdmin;
       try {
         snapAdmin = await getDocs(qAdmin);
-      } catch {
+      } catch (e) {
+        console.warn("Admin notification fallback:", e);
         qAdmin = query(collection(db, 'notifications'), where('user_id', '==', 'admin'), limit(20));
         snapAdmin = await getDocs(qAdmin);
       }
@@ -3332,15 +3345,23 @@ async function fetchNotifications() {
       notifications = [...notifications, ...adminNotifs];
     }
     
-    // Re-sort and filter duplicates if any
-    notifications = Array.from(new Set(notifications.map(n => n.id)))
-      .map(id => notifications.find(n => n.id === id))
+    // Better deduplication and sorting
+    const uniqueMap = new Map();
+    notifications.forEach(n => {
+      if (n && n.id) uniqueMap.set(n.id, n);
+    });
+
+    notifications = Array.from(uniqueMap.values())
       .sort((a, b) => {
-        const timeA = a.created_at?.toMillis ? a.created_at.toMillis() : (a.created_at?.seconds ? a.created_at.seconds * 1000 : 0);
-        const timeB = b.created_at?.toMillis ? b.created_at.toMillis() : (b.created_at?.seconds ? b.created_at.seconds * 1000 : 0);
-        return timeB - timeA;
+        const getMs = (notif) => {
+          if (!notif || !notif.created_at) return 0;
+          if (typeof notif.created_at.toMillis === 'function') return notif.created_at.toMillis();
+          if (notif.created_at.seconds) return notif.created_at.seconds * 1000;
+          return new Date(notif.created_at).getTime() || 0;
+        };
+        return getMs(b) - getMs(a);
       })
-      .slice(0, 20);
+      .slice(0, 30);
 
     notificationList.innerHTML = '';
     
@@ -3438,6 +3459,8 @@ async function showTaskDetails(taskId) {
   const content = document.getElementById('task-detail-content');
   if (!modal || !content) return;
 
+  const isAdminFlag = localStorage.getItem('isAdminSession') === 'true';
+
   try {
     const taskSnap = await getDoc(doc(db, 'tasks', taskId));
     if (!taskSnap.exists()) throw new Error("Task not found");
@@ -3521,8 +3544,18 @@ async function showTaskDetails(taskId) {
         </div>
       </div>
       
-      <div class="flex gap-4">
-        <button id="close-detail-btn" class="btn-primary w-full py-3 rounded-xl font-bold">Close Details</button>
+      <div class="flex flex-col gap-3">
+        ${task.status === 'submitted' && isAdminFlag ? `
+          <div class="flex gap-2">
+            <button onclick="handleAdminReview(null, '${taskId}', 'approved')" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-emerald-500/20">
+              <i class="fas fa-check-circle mr-2"></i> Approve
+            </button>
+            <button onclick="handleAdminReview(null, '${taskId}', 'rejected')" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-red-500/20">
+              <i class="fas fa-times-circle mr-2"></i> Reject
+            </button>
+          </div>
+        ` : ''}
+        <button id="close-detail-btn" class="glass w-full py-3 rounded-xl font-bold text-slate-300 hover:text-white transition-all">Close Details</button>
       </div>
     `;
 
