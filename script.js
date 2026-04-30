@@ -3317,32 +3317,29 @@ async function fetchNotifications() {
 
     const isAdminFlag = localStorage.getItem('isAdminSession') === 'true';
     
-    // Fetch user-specific notifications
-    let qUser = query(collection(db, 'notifications'), where('user_id', '==', user.uid), orderBy('created_at', 'desc'), limit(20));
+    // Fetch user-specific notifications - simple query first to avoid index issues
+    let qUser = query(collection(db, 'notifications'), where('user_id', '==', user.uid), limit(30));
     let snapUser;
     try {
       snapUser = await getDocs(qUser);
     } catch (e) {
-      console.warn("User notification fallback:", e);
-      qUser = query(collection(db, 'notifications'), where('user_id', '==', user.uid), limit(20));
-      snapUser = await getDocs(qUser);
+      console.warn("User notification fetch error:", e);
+      return;
     }
     
     let notifications = snapUser.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
     // If admin, also fetch admin-targeted notifications
     if (isAdminFlag) {
-      let qAdmin = query(collection(db, 'notifications'), where('user_id', '==', 'admin'), orderBy('created_at', 'desc'), limit(20));
+      let qAdmin = query(collection(db, 'notifications'), where('user_id', '==', 'admin'), limit(30));
       let snapAdmin;
       try {
         snapAdmin = await getDocs(qAdmin);
+        const adminNotifs = snapAdmin.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+        notifications = [...notifications, ...adminNotifs];
       } catch (e) {
-        console.warn("Admin notification fallback:", e);
-        qAdmin = query(collection(db, 'notifications'), where('user_id', '==', 'admin'), limit(20));
-        snapAdmin = await getDocs(qAdmin);
+        console.warn("Admin notification fetch error:", e);
       }
-      const adminNotifs = snapAdmin.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-      notifications = [...notifications, ...adminNotifs];
     }
     
     // Better deduplication and sorting
@@ -3353,13 +3350,20 @@ async function fetchNotifications() {
 
     notifications = Array.from(uniqueMap.values())
       .sort((a, b) => {
-        const getMs = (notif) => {
-          if (!notif || !notif.created_at) return 0;
-          if (typeof notif.created_at.toMillis === 'function') return notif.created_at.toMillis();
-          if (notif.created_at.seconds) return notif.created_at.seconds * 1000;
-          return new Date(notif.created_at).getTime() || 0;
-        };
-        return getMs(b) - getMs(a);
+        try {
+          const getMs = (notif) => {
+            if (!notif || !notif.created_at) return 0;
+            if (typeof notif.created_at.toMillis === 'function') return notif.created_at.toMillis();
+            if (notif.created_at.seconds) return notif.created_at.seconds * 1000;
+            if (notif.created_at instanceof Date) return notif.created_at.getTime();
+            const date = new Date(notif.created_at);
+            return isNaN(date.getTime()) ? 0 : date.getTime();
+          };
+          return getMs(b) - getMs(a);
+        } catch (e) {
+          console.warn("Error sorting notifications:", e);
+          return 0;
+        }
       })
       .slice(0, 30);
 
@@ -3503,17 +3507,33 @@ async function showTaskDetails(taskId) {
           <p class="font-bold text-emerald-400">${completionDate.toLocaleString()}</p>
         </div>
         ` : ''}
-        ${task.submission_notes ? `
-        <div class="glass p-4 rounded-xl col-span-2 border-cyan-500/20">
-          <p class="text-[10px] text-cyan-400 uppercase font-bold mb-1">Submission Notes</p>
-          <p class="text-sm mb-2">${task.submission_notes}</p>
+        ${(task.status === 'submitted' || task.status === 'approved' || task.status === 'rejected' || task.submission_notes) ? `
+        <div class="glass p-4 rounded-xl col-span-2 border-cyan-500/30 bg-cyan-500/5">
+          <p class="text-[10px] text-cyan-400 uppercase font-bold mb-2">Team Member Submission</p>
+          <div class="mb-4">
+            <p class="text-xs text-slate-500 uppercase font-bold mb-1">Notes</p>
+            <p class="text-sm text-slate-200 bg-slate-900/50 p-3 rounded-lg border border-white/5 whitespace-pre-wrap">${task.submission_notes || '<span class="italic text-slate-500">No notes provided</span>'}</p>
+          </div>
           ${task.submission_image ? `
-            <div class="mb-4 rounded-xl overflow-hidden border border-white/10">
-              <img src="${task.submission_image}" alt="Submission Preview" class="w-full h-auto object-cover max-h-64 cursor-pointer" onclick="window.open(this.src, '_blank')">
-              <p class="text-[8px] text-center p-1 bg-black/40 text-slate-500 uppercase">Click to view full size</p>
+            <div class="mb-4">
+              <p class="text-xs text-slate-500 uppercase font-bold mb-2">Screenshot</p>
+              <div class="rounded-xl overflow-hidden border border-white/10 group relative">
+                <img src="${task.submission_image}" alt="Submission Preview" class="w-full h-auto object-cover max-h-80 cursor-pointer transition-transform group-hover:scale-[1.02]" onclick="window.open(this.src, '_blank')">
+                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity pointer-events-none">
+                  <span class="text-white text-xs font-bold bg-black/60 px-3 py-1 rounded-full"><i class="fas fa-expand-alt mr-1"></i> View Full Size</span>
+                </div>
+              </div>
             </div>
           ` : ''}
-          ${task.submission_link ? `<a href="${task.submission_link}" target="_blank" class="text-cyan-400 text-xs hover:underline flex items-center gap-1"><i class="fas fa-external-link-alt"></i> View Submission Link</a>` : ''}
+          ${task.submission_link ? `
+            <div>
+              <p class="text-xs text-slate-500 uppercase font-bold mb-1">External Link</p>
+              <a href="${task.submission_link}" target="_blank" class="text-cyan-400 text-sm hover:underline flex items-center gap-1">
+                <i class="fas fa-external-link-alt"></i> 
+                ${task.submission_link.length > 50 ? task.submission_link.substring(0, 47) + '...' : task.submission_link}
+              </a>
+            </div>
+          ` : ''}
         </div>
         ` : ''}
       </div>
