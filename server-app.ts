@@ -9,13 +9,25 @@ dotenv.config();
 
 const app = express();
 
-// Initialize Admin SDK
-if (!getApps().length) {
+// Initialize Admin SDK Lazily and Safely
+function initAdminSDK() {
+  if (getApps().length) return true;
+
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const projectId = process.env.FIREBASE_PROJECT_ID;
   
-  if (clientEmail && privateKey && projectId) {
+  if (!clientEmail || !privateKey || !projectId) {
+    console.warn("FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY or FIREBASE_PROJECT_ID not set. Admin features limited.");
+    return false;
+  }
+
+  try {
+    // Basic validation of the private key format to avoid Firebase SDK crash
+    if (!privateKey.includes('BEGIN PRIVATE KEY')) {
+      throw new Error('Invalid FIREBASE_PRIVATE_KEY format. Must be a valid PEM string.');
+    }
+
     initializeApp({
       credential: cert({
         projectId: projectId,
@@ -23,10 +35,16 @@ if (!getApps().length) {
         privateKey: privateKey,
       })
     });
-  } else {
-    console.warn("FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY or FIREBASE_PROJECT_ID not set. Admin features limited.");
+    console.log("Firebase Admin SDK initialized successfully.");
+    return true;
+  } catch (err: any) {
+    console.error("CRITICAL: Failed to initialize Firebase Admin SDK:", err.message);
+    return false;
   }
 }
+
+// Call check during load, but ignore failure (failure will be handled at runtime in routes)
+initAdminSDK();
 
 let smtpTransporter: nodemailer.Transporter | null = null;
 
@@ -93,8 +111,8 @@ app.post("/api/create-staff", async (req, res) => {
 
   const { email, password, name, role, phone } = req.body;
 
-  if (!getApps().length) {
-    return res.status(500).json({ error: "Firebase Admin is not initialized. Please set FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY." });
+  if (!initAdminSDK()) {
+    return res.status(503).json({ error: "Firebase Admin is not configured. Please ensure FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY are set correctly in Settings." });
   }
 
   try {

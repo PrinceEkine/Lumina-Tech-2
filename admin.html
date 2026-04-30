@@ -1259,6 +1259,21 @@
               <textarea id="submission-notes" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none h-32" placeholder="Describe what was done and provide links if necessary..." required></textarea>
             </div>
             <div>
+              <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Attachment / Screenshot (Optional)</label>
+              <div class="flex items-center gap-4">
+                <div id="submission-image-preview" class="w-16 h-16 rounded bg-slate-800 border border-slate-700 flex items-center justify-center overflow-hidden">
+                  <i class="fas fa-image text-slate-600 text-xl"></i>
+                </div>
+                <div class="flex-1">
+                  <input type="file" id="submission-image-file" class="hidden" accept="image/*">
+                  <button type="button" onclick="document.getElementById('submission-image-file').click()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-2 px-4 rounded border border-slate-700 transition-all">
+                    Upload Screenshot
+                  </button>
+                  <input type="hidden" id="submission-image-data">
+                </div>
+              </div>
+            </div>
+            <div>
               <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Relevant Links (Github, Drive, etc.)</label>
               <input type="text" id="submission-link" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-3 focus:border-cyan-500 outline-none" placeholder="https://...">
             </div>

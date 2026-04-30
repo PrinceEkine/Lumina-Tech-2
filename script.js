@@ -1199,10 +1199,12 @@ if (taskSubmissionForm) {
     submitBtn.disabled = true;
 
     try {
+      const imageData = document.getElementById('submission-image-data').value;
       await updateDoc(doc(db, 'tasks', taskId), {
         status: 'submitted',
         submission_notes: notes,
         submission_link: link,
+        submission_image: imageData || null,
         submitted_at: serverTimestamp()
       });
 
@@ -1210,14 +1212,17 @@ if (taskSubmissionForm) {
       taskSubmissionModal.classList.add('hidden');
       taskSubmissionModal.classList.remove('flex');
       taskSubmissionForm.reset();
+      document.getElementById('submission-image-preview').innerHTML = '<i class="fas fa-image text-slate-600 text-xl"></i>';
+      document.getElementById('submission-image-data').value = '';
       fetchMyTasks();
       
       // Notify admins
       addNotification(
         'Task Submitted',
-        `A team member has submitted a task for review.`,
+        `A team member has submitted "${notes.substring(0, 30)}..." for review.`,
         'info',
-        'admin' // Assuming 'admin' tag filters for admin users or we handle this in addNotification
+        'admin',
+        { type: 'task', id: taskId }
       );
 
     } catch (err) {
@@ -1252,7 +1257,7 @@ if (sendEmailForm) {
     const submitBtn = sendEmailForm.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerText;
     
-    const to = document.getElementById('email-to').value;
+    const to = document.getElementById('email-recipient').value;
     const subject = document.getElementById('email-subject').value;
     const message = document.getElementById('email-message').value;
 
@@ -1565,7 +1570,7 @@ if (leaveForm) {
         return;
       }
 
-      await addDoc(collection(db, 'leave_requests'), {
+      const docRef = await addDoc(collection(db, 'leave_requests'), {
         staff_id: user.uid,
         staff_name: staffName,
         type: leaveType,
@@ -1576,7 +1581,16 @@ if (leaveForm) {
         created_at: serverTimestamp()
       });
 
-      // Notify Admins
+      // Add Internal Notification for Admins
+      await addNotification(
+        'New Leave Request',
+        `${staffName} has requested leave (${leaveType}) from ${leaveStart} to ${leaveEnd}.`,
+        'alert',
+        'admin',
+        { type: 'leave', id: docRef.id }
+      );
+
+      // Notify Admins via Email
       try {
         const adminEmail1 = 'princedagogoekine@gmail.com';
         const adminEmail2 = 'soberetamunoala@gmail.com';
@@ -1903,14 +1917,15 @@ if (assignTaskForm) {
       };
 
       console.log("Saving task data:", taskData);
-      await addDoc(collection(db, 'tasks'), taskData);
+      const docRef = await addDoc(collection(db, 'tasks'), taskData);
 
       // Notify the staff member
       await addNotification(
         'New Task Assigned',
         `You have been assigned a new task: ${taskTitle}. Due date: ${taskData.due_date}`,
         'task',
-        assigneeId
+        assigneeId,
+        { type: 'task', id: docRef.id }
       );
 
       showToast('Task assigned successfully!', 'success');
@@ -3289,16 +3304,43 @@ async function fetchNotifications() {
     const user = auth.currentUser;
     if (!user) return;
 
-    let q = query(collection(db, 'notifications'), where('user_id', '==', user.uid), orderBy('created_at', 'desc'), limit(20));
-    let snapshot;
+    const isAdminFlag = localStorage.getItem('isAdminSession') === 'true';
+    
+    // Fetch user-specific notifications
+    let qUser = query(collection(db, 'notifications'), where('user_id', '==', user.uid), orderBy('created_at', 'desc'), limit(20));
+    let snapUser;
     try {
-      snapshot = await getDocs(q);
-    } catch (indexErr) {
-      console.warn("Notifications index missing or error, falling back:", indexErr);
-      q = query(collection(db, 'notifications'), where('user_id', '==', user.uid), limit(20));
-      snapshot = await getDocs(q);
+      snapUser = await getDocs(qUser);
+    } catch {
+      qUser = query(collection(db, 'notifications'), where('user_id', '==', user.uid), limit(20));
+      snapUser = await getDocs(qUser);
     }
-    const notifications = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    
+    let notifications = snapUser.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+
+    // If admin, also fetch admin-targeted notifications
+    if (isAdminFlag) {
+      let qAdmin = query(collection(db, 'notifications'), where('user_id', '==', 'admin'), orderBy('created_at', 'desc'), limit(20));
+      let snapAdmin;
+      try {
+        snapAdmin = await getDocs(qAdmin);
+      } catch {
+        qAdmin = query(collection(db, 'notifications'), where('user_id', '==', 'admin'), limit(20));
+        snapAdmin = await getDocs(qAdmin);
+      }
+      const adminNotifs = snapAdmin.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      notifications = [...notifications, ...adminNotifs];
+    }
+    
+    // Re-sort and filter duplicates if any
+    notifications = Array.from(new Set(notifications.map(n => n.id)))
+      .map(id => notifications.find(n => n.id === id))
+      .sort((a, b) => {
+        const timeA = a.created_at?.toMillis ? a.created_at.toMillis() : (a.created_at?.seconds ? a.created_at.seconds * 1000 : 0);
+        const timeB = b.created_at?.toMillis ? b.created_at.toMillis() : (b.created_at?.seconds ? b.created_at.seconds * 1000 : 0);
+        return timeB - timeA;
+      })
+      .slice(0, 20);
 
     notificationList.innerHTML = '';
     
@@ -3331,9 +3373,32 @@ async function fetchNotifications() {
       `;
       
       div.onclick = async () => {
-        if (!notif.read) {
+        // Only mark as read if it's personal. Admin-targeted common notifications stay for others.
+        if (!notif.read && notif.user_id !== 'admin') {
           await updateDoc(doc(db, 'notifications', notif.id), { read: true });
           fetchNotifications();
+        }
+        
+        // Handle deep links
+        if (notif.data) {
+          const { type, id } = notif.data;
+          console.log("[Notification] Handling interaction for:", type, id);
+          
+          if (type === 'task') {
+            const isAdmin = localStorage.getItem('isAdminSession') === 'true';
+            if (isAdmin) {
+              document.getElementById('nav-assign-task').click();
+            } else {
+              document.getElementById('nav-my-tasks').click();
+            }
+            showTaskDetails(id);
+          } else if (type === 'booking') {
+            document.getElementById('nav-bookings').click();
+          } else if (type === 'message') {
+            document.getElementById('nav-messages').click();
+          } else if (type === 'leave') {
+            document.getElementById('nav-leave').click();
+          }
         }
       };
       
@@ -3345,7 +3410,7 @@ async function fetchNotifications() {
   }
 }
 
-async function addNotification(title, message, tag, targetUserId) {
+async function addNotification(title, message, tag, targetUserId, data = null) {
   const user = auth.currentUser;
   const recipientId = targetUserId || user?.uid;
   if (!recipientId) return;
@@ -3357,6 +3422,7 @@ async function addNotification(title, message, tag, targetUserId) {
       message,
       tag,
       read: false,
+      data: data,
       created_at: serverTimestamp()
     });
 
@@ -3418,6 +3484,12 @@ async function showTaskDetails(taskId) {
         <div class="glass p-4 rounded-xl col-span-2 border-cyan-500/20">
           <p class="text-[10px] text-cyan-400 uppercase font-bold mb-1">Submission Notes</p>
           <p class="text-sm mb-2">${task.submission_notes}</p>
+          ${task.submission_image ? `
+            <div class="mb-4 rounded-xl overflow-hidden border border-white/10">
+              <img src="${task.submission_image}" alt="Submission Preview" class="w-full h-auto object-cover max-h-64 cursor-pointer" onclick="window.open(this.src, '_blank')">
+              <p class="text-[8px] text-center p-1 bg-black/40 text-slate-500 uppercase">Click to view full size</p>
+            </div>
+          ` : ''}
           ${task.submission_link ? `<a href="${task.submission_link}" target="_blank" class="text-cyan-400 text-xs hover:underline flex items-center gap-1"><i class="fas fa-external-link-alt"></i> View Submission Link</a>` : ''}
         </div>
         ` : ''}
@@ -3483,6 +3555,23 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Theme Toggle Logic removed from bottom
+// Task Submission Image Logic
+const submissionImageFile = document.getElementById('submission-image-file');
+const submissionImagePreview = document.getElementById('submission-image-preview');
+if (submissionImageFile && submissionImagePreview) {
+  submissionImageFile.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        submissionImagePreview.innerHTML = `<img src="${event.target.result}" class="w-full h-full object-cover">`;
+        document.getElementById('submission-image-data').value = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+}
+
 async function fetchBlogs(searchTerm = '', categoryFilter = 'All') {
   const container = document.getElementById('blog-posts-container');
   if (!container) return;
