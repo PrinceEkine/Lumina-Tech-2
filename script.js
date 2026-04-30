@@ -1190,9 +1190,14 @@ if (taskSubmissionForm) {
   taskSubmissionForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const taskId = document.getElementById('submission-task-id').value;
-    const notes = document.getElementById('submission-notes').value;
-    const link = document.getElementById('submission-link').value;
+    const submitNotes = document.getElementById('submission-notes').value.trim();
+    const submitLink = document.getElementById('submission-link').value.trim();
     const submitBtn = taskSubmissionForm.querySelector('button[type="submit"]');
+    
+    if (!submitNotes) {
+      showToast('Please provide submission notes.', 'warning');
+      return;
+    }
     
     const originalText = submitBtn.innerHTML;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Submitting...';
@@ -1202,8 +1207,8 @@ if (taskSubmissionForm) {
       const imageData = document.getElementById('submission-image-data').value;
       await updateDoc(doc(db, 'tasks', taskId), {
         status: 'submitted',
-        submission_notes: notes,
-        submission_link: link,
+        submission_notes: submitNotes,
+        submission_link: submitLink,
         submission_image: imageData || null,
         submitted_at: serverTimestamp()
       });
@@ -1219,7 +1224,7 @@ if (taskSubmissionForm) {
       // Notify admins
       addNotification(
         'Task Submitted',
-        `A team member has submitted "${notes.substring(0, 30)}..." for review.`,
+        `A team member has submitted "${submitNotes.substring(0, 30)}..." for review.`,
         'info',
         'admin',
         { type: 'task', id: taskId }
@@ -3527,7 +3532,7 @@ async function showTaskDetails(taskId, viewContext = 'staff') {
         <div class="mb-4">
           <p class="text-[10px] text-slate-500 uppercase font-bold mb-1">Submission Notes</p>
           <div class="text-sm text-slate-200 bg-slate-900/50 p-4 rounded-lg border border-white/5 whitespace-pre-wrap leading-relaxed">
-            ${task.submission_notes || task.notes || task.remarks || '<span class="italic text-slate-500 text-xs">No specific submission notes were found.</span>'}
+            ${task.submission_notes || task.notes || task.submission_comment || task.remarks || '<span class="italic text-slate-500 text-xs">No specific submission notes were found.</span>'}
           </div>
         </div>
 

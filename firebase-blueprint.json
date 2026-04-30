@@ -45,6 +45,12 @@
         "status": { "type": "string", "enum": ["pending", "in-progress", "completed"] },
         "created_at": { "type": "string", "format": "date-time" },
         "created_by": { "type": "string" },
+        "created_by_name": { "type": "string" },
+        "submission_notes": { "type": "string" },
+        "submission_link": { "type": "string" },
+        "submission_image": { "type": "string" },
+        "submitted_at": { "type": "string", "format": "date-time" },
+        "reviewer_remarks": { "type": "string" },
         "completion_date": { "type": "string", "format": "date-time" }
       },
       "required": ["title", "assignee_id", "status"]
