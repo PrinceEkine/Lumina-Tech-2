@@ -618,7 +618,10 @@ forms.forEach(form => {
     
     // Skip generic handling for specifically named forms
     const specificFormHandlers = ['add-announcement-form', 'assign-task-form', 'task-submission-form', 'send-email-form', 'recognition-form', 'leave-form', 'blog-form', 'add-staff-form', 'home-chat-form', 'floating-chat-form'];
-    if (specificFormHandlers.includes(form.id)) return;
+    if (specificFormHandlers.includes(form.id) || form.id === 'task-submission-form') {
+      console.log("[Form] Skipping generic handler for:", form.id);
+      return;
+    }
     const submitBtn = form.querySelector('button[type="submit"]');
     const originalText = submitBtn ? submitBtn.innerText : 'Submit';
     
@@ -1204,13 +1207,24 @@ if (taskSubmissionForm) {
     submitBtn.disabled = true;
 
     try {
-      const imageData = document.getElementById('submission-image-data').value;
+      let imageData = document.getElementById('submission-image-data').value;
+      
+      // Compress image if it exists to avoid Firestore 1MB limit
+      if (imageData && imageData.startsWith('data:image')) {
+        try {
+          imageData = await compressImage(imageData, 500); // Target 500KB
+        } catch (compressErr) {
+          console.warn("Image compression failed, using original:", compressErr);
+        }
+      }
+
       await updateDoc(doc(db, 'tasks', taskId), {
         status: 'submitted',
         submission_notes: submitNotes,
         submission_link: submitLink,
         submission_image: imageData || null,
-        submitted_at: serverTimestamp()
+        submitted_at: serverTimestamp(),
+        updated_at: serverTimestamp()
       });
 
       showToast('Task submitted for review!', 'success');
@@ -3467,6 +3481,46 @@ async function addNotification(title, message, tag, targetUserId, data = null) {
   } catch (error) {
     console.error("Error adding notification:", error);
   }
+}
+
+// --- Image Compression Helper ---
+async function compressImage(base64Str, maxSizeKB = 500) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+      
+      const maxDim = 1200;
+      if (width > height) {
+        if (width > maxDim) {
+          height *= maxDim / width;
+          width = maxDim;
+        }
+      } else {
+        if (height > maxDim) {
+          width *= maxDim / height;
+          height = maxDim;
+        }
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      let quality = 0.8;
+      let compressed = canvas.toDataURL('image/jpeg', quality);
+      while (compressed.length * 0.75 / 1024 > maxSizeKB && quality > 0.1) {
+        quality -= 0.1;
+        compressed = canvas.toDataURL('image/jpeg', quality);
+      }
+      resolve(compressed);
+    };
+    img.onerror = reject;
+    img.src = base64Str;
+  });
 }
 
 // --- Task Detail Modal Logic ---
