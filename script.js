@@ -3483,23 +3483,6 @@ async function addNotification(title, message, tag, targetUserId, data = null) {
   }
 }
 
-// --- Firestore Error Handler ---
-function handleFirestoreError(error, operationType, path) {
-  const errInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous
-    },
-    operationType,
-    path
-  };
-  console.error('Firestore Error details:', JSON.stringify(errInfo, null, 2));
-  // Not throwing here to allow the UI to handle it gracefully with toast if preferred
-}
-
 // --- Image Compression Helper ---
 async function compressImage(base64Str, maxSizeKB = 500) {
   return new Promise((resolve, reject) => {
@@ -3898,21 +3881,10 @@ if (blogForm) {
     if (submitBtn) setLoading(submitBtn, true, id ? 'Updating...' : 'Publishing...');
     
     try {
-      let finalImageUrl = imageUrl;
-      
-      // Compress image if it's a base64 string
-      if (imageUrl && imageUrl.startsWith('data:image')) {
-        try {
-          finalImageUrl = await compressImage(imageUrl, 500); // 500KB is safer for 1MB document limit
-        } catch (compressErr) {
-          console.warn("Blog image compression failed:", compressErr);
-        }
-      }
-
       const blogData = {
         title,
         category,
-        image_url: finalImageUrl,
+        image_url: imageUrl,
         excerpt,
         content,
         updated_at: serverTimestamp()
@@ -3930,7 +3902,6 @@ if (blogForm) {
       fetchAdminBlogs();
     } catch (error) {
       console.error("Error saving blog:", error);
-      handleFirestoreError(error, 'write', `blogs/${id || 'new'}`);
       showToast('Failed to save blog. Please try again.', 'error');
     } finally {
       const submitBtn = blogForm.querySelector('button[type="submit"]');
